@@ -22,4 +22,8 @@ public class Programa {
 
     @OneToMany(mappedBy = "programa")
     private List<Feedback> feedbacks;
+
+    @ManyToOne
+    @JoinColumn(name = "reporte_id")  // columna FK en la tabla "programa"
+    private Reporte reporte;
 }

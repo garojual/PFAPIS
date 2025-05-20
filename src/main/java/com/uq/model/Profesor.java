@@ -21,6 +21,4 @@ public class Profesor {
 
     @OneToMany(mappedBy = "profesor")
     private List<Ejemplo> ejemplos;
-
-    // Getters and setters
 }
