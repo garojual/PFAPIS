@@ -19,13 +19,13 @@ import org.mindrot.jbcrypt.BCrypt;
 import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.Random;
-import java.util.logging.Level; // Importar Logger y Level
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 @ApplicationScoped
 public class EstudianteService {
 
-    private static final Logger LOGGER = Logger.getLogger(EstudianteService.class.getName()); // Logger
+    private static final Logger LOGGER = Logger.getLogger(EstudianteService.class.getName());
 
     @Inject
     EstudianteRepository estudianteRepository;
@@ -34,9 +34,8 @@ public class EstudianteService {
     EstudianteMapper estudianteMapper;
 
     @Inject
-    EmailService emailService; // Inyectar el nuevo EmailService
+    EmailService emailService;
 
-    // Constante para la validez del código de verificación (15 minutos)
     private static final int VERIFICATION_CODE_VALIDITY_MINUTES = 15;
 
     @Transactional
@@ -63,10 +62,8 @@ public class EstudianteService {
             emailService.sendVerificationEmail(estudiante.getEmail(), verificationCode);
             LOGGER.log(Level.INFO, "Solicitud de envío de correo de verificación iniciada para {0}", estudiante.getEmail());
         } catch (Exception e) {
-            // Capturamos cualquier excepción aquí para que no afecte el registro del usuario
             LOGGER.log(Level.WARNING, "Fallo al iniciar el envío del correo de verificación para " + estudiante.getEmail(), e);
         }
-
 
         return estudianteMapper.toResponse(estudiante);
     }
@@ -81,7 +78,7 @@ public class EstudianteService {
             throw new UserNotFoundException("Usuario no encontrado.");
         }
 
-        Estudiante estudiante = getEstudiante(code, estudianteOptional);
+        Estudiante estudiante = getEstudianteFromOptional(code, estudianteOptional); // Renombrado el método
 
         if (estudiante.getCodeExpirationDate() == null || LocalDateTime.now().isAfter(estudiante.getCodeExpirationDate())) {
             throw new ExpiredVerificationCodeException("El código de verificación ha expirado.");
@@ -93,7 +90,7 @@ public class EstudianteService {
 
     }
 
-    private static Estudiante getEstudiante(String code, Optional<Estudiante> estudianteOptional) {
+    private Estudiante getEstudianteFromOptional(String code, Optional<Estudiante> estudianteOptional) { // Renombrado el método
         Estudiante estudiante = estudianteOptional.get();
 
         if (estudiante.isActive()) {
@@ -105,6 +102,7 @@ public class EstudianteService {
         }
         return estudiante;
     }
+
 
     public String login(String email, String clave)
             throws UserNotFoundException, InvalidCredentialsException, InactiveAccountException {
@@ -127,6 +125,17 @@ public class EstudianteService {
 
         return estudiante.getEmail();
     }
+
+    // --- Nuevo método para obtener el ID del estudiante por email ---
+    public Long getIdByEmail(String email) throws UserNotFoundException {
+        Optional<Estudiante> estudianteOptional = estudianteRepository.findByEmail(email);
+        if (!estudianteOptional.isPresent()) {
+            throw new UserNotFoundException("Usuario no encontrado con email: " + email);
+        }
+        return estudianteOptional.get().getId();
+    }
+    // --- Fin Nuevo método ---
+
 
     @Transactional
     public UserResponse updateEstudiante(Long id, Estudiante estudiante) {
@@ -175,7 +184,7 @@ public class EstudianteService {
 
     private String generateVerificationCode() {
         Random random = new Random();
-        int code = 100000 + random.nextInt(900000); // Código de 6 dígitos
+        int code = 100000 + random.nextInt(900000);
         return String.valueOf(code);
     }
 }
