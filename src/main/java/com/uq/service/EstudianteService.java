@@ -126,7 +126,7 @@ public class EstudianteService {
         return estudiante.getEmail();
     }
 
-    // --- Nuevo método para obtener el ID del estudiante por email ---
+    // Metodo para obtener el ID del estudiante por email ---
     public Long getIdByEmail(String email) throws UserNotFoundException {
         Optional<Estudiante> estudianteOptional = estudianteRepository.findByEmail(email);
         if (!estudianteOptional.isPresent()) {
@@ -134,8 +134,6 @@ public class EstudianteService {
         }
         return estudianteOptional.get().getId();
     }
-    // --- Fin Nuevo método ---
-
 
     @Transactional
     public UserResponse updateEstudiante(Long id, Estudiante estudiante) {

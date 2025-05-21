@@ -16,6 +16,8 @@ public class Programa {
     private String codigoFuente;
     private boolean isResuelto;
 
+    private boolean isShared;
+
     @ManyToOne
     @JoinColumn(name = "estudiante_id")
     private Estudiante estudiante;

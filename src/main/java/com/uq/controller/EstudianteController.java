@@ -1,18 +1,7 @@
 package com.uq.controller;
 
-import com.uq.dto.EstudianteDTO;
-import com.uq.dto.EstudianteLoginDTO;
-import com.uq.dto.EstudianteVerificationRequest;
-import com.uq.dto.ProgramaDTO;
-import com.uq.dto.UserResponse;
-import com.uq.exception.AccountAlreadyVerifiedException;
-import com.uq.exception.ExpiredVerificationCodeException;
-import com.uq.exception.InactiveAccountException;
-import com.uq.exception.InvalidCredentialsException;
-import com.uq.exception.InvalidVerificationCodeException;
-import com.uq.exception.ProgramNotFoundException;
-import com.uq.exception.UnauthorizedException;
-import com.uq.exception.UserNotFoundException;
+import com.uq.dto.*;
+import com.uq.exception.*;
 import com.uq.mapper.EstudianteMapper;
 import com.uq.security.JWTUtil;
 import com.uq.security.TokenResponse;
@@ -278,6 +267,46 @@ public class EstudianteController {
         }
     }
 
+    // Endpoint para obtener los programas del usuario autenticado actual
+    @GET
+    @Path("/me/programas")
+    @SecurityRequirement(name = "jwtAuth")
+    @Operation(summary = "Obtiene todos los programas del usuario autenticado", description = "Lista todos los programas del usuario que ha iniciado sesión.")
+    @APIResponse(responseCode = "200", description = "Lista de programas obtenida exitosamente",
+            content = @Content(schema = @Schema(implementation = ProgramaDTO.class)))
+    @APIResponse(responseCode = "401", description = "No autenticado")
+    @APIResponse(responseCode = "404", description = "Usuario autenticado no encontrado en DB (Error interno o configuración)")
+    @APIResponse(responseCode = "500", description = "Error en el servidor")
+    public Response getMyProgramas() {
+        // Obtener el ID del usuario autenticado del SecurityContext
+        if (securityContext == null || securityContext.getUserPrincipal() == null) {
+            LOGGER.severe("-> getMyProgramas: Endpoint protegido pero SecurityContext/Principal es null.");
+            return Response.status(Response.Status.UNAUTHORIZED).build();
+        }
+        String authenticatedUserEmail = securityContext.getUserPrincipal().getName();
+        Long authenticatedEstudianteId;
+        try {
+            authenticatedEstudianteId = estudianteService.getIdByEmail(authenticatedUserEmail);
+            if (authenticatedEstudianteId == null) {
+                LOGGER.severe("-> getMyProgramas: Usuario autenticado con email '" + authenticatedUserEmail + "' no encontrado en DB después de autenticación JWT exitosa.");
+                return Response.status(Response.Status.NOT_FOUND).entity("{\"error\": \"Usuario autenticado no encontrado.\"}").type(MediaType.APPLICATION_JSON).build();
+            }
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "-> getMyProgramas: ERROR inesperado al obtener ID del usuario autenticado.", e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"error\": \"Error en el servidor al obtener información del usuario autenticado.\"}").type(MediaType.APPLICATION_JSON).build();
+        }
+
+        try {
+            // Llama al servicio para obtener los programas usando el ID del usuario autenticado
+            List<ProgramaDTO> programas = programaService.getProgramsByEstudianteId(authenticatedEstudianteId);
+            return Response.ok(programas).build();
+        }
+        catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Error inesperado al obtener programas del usuario autenticado.", e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"error\": \"Error en el servidor al obtener tus programas.\"}")
+                    .type(MediaType.APPLICATION_JSON).build();
+        }
+    }
 
     // ******************************************************
     // --- Aquí empieza la lógica de gestión de Programas ---
@@ -534,6 +563,126 @@ public class EstudianteController {
         catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Error inesperado al eliminar programa.", e);
             return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"error\": \"Error en el servidor al eliminar programa.\"}").type(MediaType.APPLICATION_JSON).build();
+        }
+    }
+
+    // Endpoint para cambiar el estado de compartir de un programa
+    @PUT
+    @Path("/programas/{programaId}/compartir")
+    @SecurityRequirement(name = "jwtAuth")
+    @Operation(summary = "Cambia el estado de compartir de un programa", description = "Marca un programa como compartido o no compartido. Requiere autenticación y ser el dueño.")
+    @APIResponse(responseCode = "200", description = "Estado de compartir actualizado exitosamente",
+            content = @Content(schema = @Schema(implementation = ProgramaDTO.class)))
+    @APIResponse(responseCode = "400", description = "Cuerpo de solicitud inválido (espera boolean)")
+    @APIResponse(responseCode = "401", description = "No autenticado")
+    @APIResponse(responseCode = "403", description = "No autorizado (el usuario autenticado no es el dueño)")
+    @APIResponse(responseCode = "404", description = "Programa no encontrado")
+    @APIResponse(responseCode = "500", description = "Error en el servidor")
+    // El cuerpo de la solicitud será un boolean simple: true para compartir, false para dejar de compartir
+    @Consumes(MediaType.APPLICATION_JSON) // Consume JSON
+    public Response updateProgramaSharingStatus(
+            @PathParam("programaId") Long programaId,
+            // Recibe un boolean simple en el cuerpo.
+            boolean sharedStatus
+    ) {
+        // Obtener el ID del usuario autenticado
+        if (securityContext == null || securityContext.getUserPrincipal() == null) {
+            LOGGER.severe("-> updateProgramaSharingStatus: Endpoint protegido pero SecurityContext/Principal es null.");
+            return Response.status(Response.Status.UNAUTHORIZED).build();
+        }
+        String authenticatedUserEmail = securityContext.getUserPrincipal().getName();
+        Long authenticatedEstudianteId;
+        try {
+            authenticatedEstudianteId = estudianteService.getIdByEmail(authenticatedUserEmail);
+            if (authenticatedEstudianteId == null) {
+                LOGGER.severe("-> updateProgramaSharingStatus: Usuario autenticado con email '" + authenticatedUserEmail + "' no encontrado en DB.");
+                return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"error\": \"Error interno: Usuario autenticado no encontrado.\"}").type(MediaType.APPLICATION_JSON).build();
+            }
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "-> updateProgramaSharingStatus: ERROR inesperado al obtener ID del usuario autenticado.", e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"error\": \"Error en el servidor al obtener información del usuario autenticado.\"}").type(MediaType.APPLICATION_JSON).build();
+        }
+
+        try {
+            // Llamar al servicio para actualizar el estado de compartir
+            ProgramaDTO updatedPrograma = programaService.updateSharingStatus(programaId, sharedStatus, authenticatedEstudianteId);
+            return Response.ok(updatedPrograma).build();
+        } catch (ProgramNotFoundException e) {
+            return Response.status(Response.Status.NOT_FOUND).entity("{\"error\": \"" + e.getMessage() + "\"}").type(MediaType.APPLICATION_JSON).build();
+        } catch (UnauthorizedException e) {
+            return Response.status(Response.Status.FORBIDDEN).entity("{\"error\": \"" + e.getMessage() + "\"}").type(MediaType.APPLICATION_JSON).build();
+        }
+        catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Error inesperado al actualizar estado de compartir de programa.", e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"error\": \"Error en el servidor al actualizar estado de compartir.\"}").type(MediaType.APPLICATION_JSON).build();
+        }
+    }
+
+    // ******************************************************
+    // --- Lógica de Ejecución de Programas ---
+    // ******************************************************
+
+    // Endpoint para ejecutar un programa por su ID
+    @POST
+    @Path("/programas/{programaId}/ejecutar")
+    @SecurityRequirement(name = "jwtAuth")
+    @Operation(summary = "Ejecuta un programa por ID", description = "Compila y ejecuta el código de un programa. Requiere autenticación y ser el dueño.")
+    @APIResponse(responseCode = "200", description = "Ejecución completada",
+            content = @Content(schema = @Schema(implementation = ProgramaExecutionResultDTO.class)))
+    @APIResponse(responseCode = "401", description = "No autenticado")
+    @APIResponse(responseCode = "403", description = "No autorizado (el usuario autenticado no es el dueño)")
+    @APIResponse(responseCode = "404", description = "Programa no encontrado")
+    @APIResponse(responseCode = "400", description = "Error de ejecución o compilación del código")
+    @APIResponse(responseCode = "500", description = "Error interno del servidor al intentar ejecutar")
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response executePrograma(
+            @PathParam("programaId") Long programaId
+    ) {
+        // Obtener el ID del usuario autenticado
+        if (securityContext == null || securityContext.getUserPrincipal() == null) {
+            LOGGER.severe("-> executePrograma: Endpoint protegido pero SecurityContext/Principal es null.");
+            return Response.status(Response.Status.UNAUTHORIZED).build();
+        }
+        String authenticatedUserEmail = securityContext.getUserPrincipal().getName();
+        Long authenticatedEstudianteId;
+        try {
+            authenticatedEstudianteId = estudianteService.getIdByEmail(authenticatedUserEmail);
+            if (authenticatedEstudianteId == null) {
+                LOGGER.severe("-> executePrograma: Usuario autenticado con email '" + authenticatedUserEmail + "' no encontrado en DB.");
+                return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"error\": \"Error interno: Usuario autenticado no encontrado.\"}").type(MediaType.APPLICATION_JSON).build();
+            }
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "-> executePrograma: ERROR inesperado al obtener ID del usuario autenticado.", e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"error\": \"Error en el servidor al obtener información del usuario autenticado.\"}").type(MediaType.APPLICATION_JSON).build();
+        }
+
+        try {
+            // Llama al servicio para ejecutar el programa
+            ProgramaExecutionResultDTO result = programaService.executeProgram(programaId, authenticatedEstudianteId);
+            return Response.ok(result).build();
+
+        } catch (ProgramNotFoundException e) {
+            return Response.status(Response.Status.NOT_FOUND).entity("{\"error\": \"" + e.getMessage() + "\"}").type(MediaType.APPLICATION_JSON).build();
+        } catch (UnauthorizedException e) {
+            return Response.status(Response.Status.FORBIDDEN).entity("{\"error\": \"" + e.getMessage() + "\"}").type(MediaType.APPLICATION_JSON).build();
+        } catch (ProgramExecutionException e) {
+            if (e.getMessage().contains("Error de compilación") || e.getMessage().contains("código fuente vacío")) {
+                // Para errores de compilación o código vacío
+                return Response.status(Response.Status.BAD_REQUEST).entity("{\"error\": \"" + e.getMessage() + "\", \"details\": \"" + (e.getCause() != null ? e.getCause().getMessage() : "") + "\"}").type(MediaType.APPLICATION_JSON).build();
+            } else if (e.getMessage().contains("Tiempo de ejecución excedido")) {
+                // Para timeout de ejecución
+                return Response.status(Response.Status.BAD_REQUEST).entity("{\"error\": \"" + e.getMessage() + "\"}").type(MediaType.APPLICATION_JSON).build();
+            }
+            else {
+                LOGGER.log(Level.SEVERE, "Error inesperado durante el proceso de ejecución del programa.", e);
+                return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"error\": \"Error interno al ejecutar el programa: " + e.getMessage() + "\"}").type(MediaType.APPLICATION_JSON).build();
+            }
+        }
+        catch (Exception e) {
+            // Captura cualquier otra excepción inesperada
+            LOGGER.log(Level.SEVERE, "Error inesperado en el endpoint de ejecución de programa.", e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"error\": \"Error en el servidor al ejecutar programa.\"}")
+                    .type(MediaType.APPLICATION_JSON).build();
         }
     }
 }

@@ -11,8 +11,6 @@ import java.util.List;
 
 @Mapper(componentModel = "jakarta",
         unmappedTargetPolicy = ReportingPolicy.IGNORE
-        // Si Programa tiene campos complejos o colecciones, puede necesitar mappers auxiliares
-        // uses = {FeedbackMapper.class, ReporteMapper.class}
 )
 public interface ProgramaMapper {
 
@@ -21,6 +19,8 @@ public interface ProgramaMapper {
     @Mapping(target = "feedbacks", ignore = true)
     @Mapping(target = "reporte", ignore = true)
     Programa toEntity(ProgramaDTO programaDTO);
+
+    @Mapping(source = "id", target = "id") // Mapea el ID de la Entidad (source) al ID del DTO (target)
 
     ProgramaDTO toDTO(Programa programa);
 
