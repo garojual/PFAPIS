@@ -9,6 +9,7 @@ import com.uq.mapper.ProfesorMapper;
 import com.uq.security.JWTUtil;
 import com.uq.security.TokenResponse;
 import com.uq.service.ComentarioService;
+import com.uq.service.EjemploService;
 import com.uq.service.ProfesorService;
 import com.uq.service.ProgramaService;
 import jakarta.inject.Inject;
@@ -56,6 +57,9 @@ public class ProfesorController {
 
     @Inject
     ComentarioService comentarioService;
+
+    @Inject
+    EjemploService ejemploService;
 
 
     @PUT
@@ -301,6 +305,64 @@ public class ProfesorController {
         catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Error inesperado al añadir comentario al programa " + programaId, e);
             return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"error\": \"Error en el servidor al añadir comentario.\"}")
+                    .type(MediaType.APPLICATION_JSON).build();
+        }
+    }
+
+    // ******************************************************
+    // --- Lógica de Compartir Ejemplos (Crear) ---
+    // ******************************************************
+
+    // Endpoint para que un profesor cree y comparta un nuevo ejemplo
+    @POST
+    @Path("/ejemplos")
+    @SecurityRequirement(name = "jwtAuth")
+    @Operation(summary = "Crea un nuevo ejemplo de código", description = "Permite a un profesor crear y compartir un nuevo ejemplo de código Java. Requiere autenticación como profesor.")
+    @APIResponse(responseCode = "201", description = "Ejemplo creado exitosamente",
+            content = @Content(schema = @Schema(implementation = EjemploDTO.class)))
+    @APIResponse(responseCode = "400", description = "Datos del ejemplo incompletos o formato inválido")
+    @APIResponse(responseCode = "401", description = "No autenticado")
+    @APIResponse(responseCode = "403", description = "No autorizado (el usuario autenticado no es un profesor)")
+    @APIResponse(responseCode = "500", description = "Error en el servidor")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response createEjemplo(@Valid EjemploDTO request) {
+
+        // Lógica de autorización: Verificar que el usuario autenticado es un profesor.
+        if (securityContext == null || securityContext.getUserPrincipal() == null) {
+            LOGGER.severe("-> createEjemplo: Endpoint protegido pero SecurityContext/Principal es null.");
+            return Response.status(Response.Status.UNAUTHORIZED).build();
+        }
+        String authenticatedUserEmail = securityContext.getUserPrincipal().getName();
+        Long authenticatedProfesorId;
+        try {
+            authenticatedProfesorId = profesorService.getIdByEmail(authenticatedUserEmail);
+            LOGGER.info("-> createEjemplo: Acceso autorizado para profesor con ID: " + authenticatedProfesorId);
+
+        } catch (UserNotFoundException e) {
+            LOGGER.log(Level.WARNING, "-> createEjemplo: Intento de acceso por usuario autenticado pero no encontrado como Profesor: '" + authenticatedUserEmail + "'", e);
+            return Response.status(Response.Status.FORBIDDEN).entity("{\"error\": \"Acceso restringido a profesores.\"}")
+                    .type(MediaType.APPLICATION_JSON).build();
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "-> createEjemplo: ERROR inesperado al verificar la identidad del profesor.", e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"error\": \"Error interno al verificar usuario.\"}")
+                    .type(MediaType.APPLICATION_JSON).build();
+        }
+
+        try {
+            // Llamar al servicio para crear el ejemplo
+            EjemploDTO createdEjemplo = ejemploService.createExampleByProfessor(request, authenticatedProfesorId);
+            return Response.status(Response.Status.CREATED).entity(createdEjemplo).build();
+
+        } catch (UserNotFoundException e) {
+            LOGGER.log(Level.SEVERE, "Profesor " + authenticatedProfesorId + " no encontrado en DB durante createExampleByProfessor (defensivo).", e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"error\": \"Error interno: Profesor creador no encontrado.\"}").type(MediaType.APPLICATION_JSON).build();
+        } catch (IllegalArgumentException e) {
+            return Response.status(Response.Status.BAD_REQUEST).entity("{\"error\": \"" + e.getMessage() + "\"}").type(MediaType.APPLICATION_JSON).build();
+        }
+        catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Error inesperado al crear ejemplo.", e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"error\": \"Error en el servidor al crear ejemplo.\"}")
                     .type(MediaType.APPLICATION_JSON).build();
         }
     }

@@ -61,8 +61,10 @@ public class EstudianteController {
     @Context
     SecurityContext securityContext;
 
+    @Inject
     EjemploService ejemploService;
 
+    @Inject
     ComentarioService comentarioService;
 
 

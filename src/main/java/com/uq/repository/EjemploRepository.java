@@ -17,6 +17,6 @@ public class EjemploRepository implements PanacheRepository<Ejemplo> {
     // Metodo para listar ejemplos compartidos por tema
     public List<Ejemplo> listSharedByTema(String tema) {
         // Consulta Panache: donde shared es true AND tema coincide
-        return list("shared = ?1 and tema = ?2", true, tema);
+        return list("shared = true and tema = ?1", true, tema);
     }
 }
