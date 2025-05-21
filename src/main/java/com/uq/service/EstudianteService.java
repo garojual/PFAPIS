@@ -124,6 +124,7 @@ public class EstudianteService {
         }
 
         return estudiante.getEmail();
+
     }
 
     // Metodo para obtener el ID del estudiante por email ---

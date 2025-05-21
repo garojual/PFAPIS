@@ -21,14 +21,13 @@ public interface ProgramaMapper {
     Programa toEntity(ProgramaDTO programaDTO);
 
     @Mapping(source = "id", target = "id") // Mapea el ID de la Entidad (source) al ID del DTO (target)
+    @Mapping(source = "estudiante.id", target = "estudianteId") // Mapea el ID del Estudiante relacionado (source) al nuevo campo del DTO (target)
 
     ProgramaDTO toDTO(Programa programa);
 
     List<ProgramaDTO> toDTOList(List<Programa> programas);
 
     // Metodo para actualizar una entidad existente desde un DTO
-    // @MappingTarget indica que el segundo argumento es la entidad a actualizar
-    // Ignoramos campos que no deben ser actualizados desde el DTO (como ID o relaciones)
     @Mapping(target = "id", ignore = true)
     @Mapping(target = "estudiante", ignore = true) // No cambiar el estudiante propietario al actualizar
     @Mapping(target = "feedbacks", ignore = true)

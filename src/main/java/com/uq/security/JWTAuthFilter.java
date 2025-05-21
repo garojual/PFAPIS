@@ -115,6 +115,11 @@ public class JWTAuthFilter implements ContainerRequestFilter {
             return false; // Verificación
         }
 
+        if ((path.equals("/profesores/login") || path.equals("/profesores/login/")) && method.equals("POST")) {
+            LOGGER.info("Endpoint de verificación detectado - No requiere autenticación");
+            return false; // Login
+        }
+
         // Swagger UI y OpenAPI
         if (path.startsWith("swagger") || path.startsWith("openapi") ||
                 path.startsWith("q/") || path.contains("swagger") ||

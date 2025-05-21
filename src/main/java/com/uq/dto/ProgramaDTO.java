@@ -15,6 +15,10 @@ public class ProgramaDTO {
     private boolean isResuelto = false;
     private boolean isShared;
 
+    private Long estudianteId;
+
+
+
     public Long getId() {
         return id;
     }
@@ -61,5 +65,13 @@ public class ProgramaDTO {
 
     public void setShared(boolean shared) {
         isShared = shared;
+    }
+
+    public Long getEstudianteId() {
+        return estudianteId;
+    }
+
+    public void setEstudianteId(Long estudianteId) {
+        this.estudianteId = estudianteId;
     }
 }

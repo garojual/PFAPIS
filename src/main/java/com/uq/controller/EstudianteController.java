@@ -63,7 +63,7 @@ public class EstudianteController {
 
     EjemploService ejemploService;
 
-    ComentarioService comentarioService; // Inyectar ComentarioService
+    ComentarioService comentarioService;
 
 
 
@@ -183,7 +183,7 @@ public class EstudianteController {
     @PUT
     @Path("/{id}")
     @SecurityRequirement(name = "jwtAuth")
-    @Operation(summary = "Actualiza un usuario existente (completo)", description = "Actualiza todos los campos de un usuario. Requiere autenticación.")
+    @Operation(summary = "Actualiza un estudiante existente (completo)", description = "Actualiza todos los campos de un usuario. Requiere autenticación.")
     @APIResponse(responseCode = "200", description = "Usuario actualizado exitosamente")
     @APIResponse(responseCode = "400", description = "Datos incompletos o formato inválido")
     @APIResponse(responseCode = "401", description = "No autenticado (Falta JWT o es inválido)")
@@ -209,7 +209,7 @@ public class EstudianteController {
     @PATCH
     @Path("/{id}")
     @SecurityRequirement(name = "jwtAuth")
-    @Operation(summary = "Actualiza un usuario existente (parcial)", description = "Actualiza campos específicos de un usuario. Requiere autenticación.")
+    @Operation(summary = "Actualiza un estudiante existente (parcial)", description = "Actualiza campos específicos de un usuario. Requiere autenticación.")
     @APIResponse(responseCode = "200", description = "Usuario actualizado exitosamente")
     @APIResponse(responseCode = "400", description = "Datos incompletos o formato inválido")
     @APIResponse(responseCode = "401", description = "No autenticado (Falta JWT o es inválido)")
@@ -235,7 +235,7 @@ public class EstudianteController {
     @DELETE
     @Path("/{id}")
     @SecurityRequirement(name = "jwtAuth")
-    @Operation(summary = "Elimina un usuario por ID", description = "Elimina un usuario del sistema. Requiere autenticación.")
+    @Operation(summary = "Elimina un estudiante por ID", description = "Elimina un usuario del sistema. Requiere autenticación.")
     @APIResponse(responseCode = "204", description = "Usuario eliminado exitosamente")
     @APIResponse(responseCode = "401", description = "No autenticado (Falta JWT o es inválido)")
     @APIResponse(responseCode = "403", description = "No autorizado (el usuario autenticado no coincide con el ID)")
@@ -255,7 +255,7 @@ public class EstudianteController {
         }
     }
 
-    // *** Método auxiliar para verificar autorización de Estudiante (para endpoints /estudiantes/{id}) ***
+    // Metodo auxiliar para verificar autorización de Estudiante (para endpoints /estudiantes/{id})
     private boolean isAuthorizedEstudiante(Long requestedEstudianteId) {
         if (securityContext == null || securityContext.getUserPrincipal() == null) {
             LOGGER.warning("-> isAuthorizedEstudiante: SecurityContext o Principal es null. Retornando false.");
@@ -279,7 +279,7 @@ public class EstudianteController {
     @GET
     @Path("/me/programas")
     @SecurityRequirement(name = "jwtAuth")
-    @Operation(summary = "Obtiene todos los programas del usuario autenticado", description = "Lista todos los programas del usuario que ha iniciado sesión.")
+    @Operation(summary = "Obtiene todos los programas del estudiante autenticado", description = "Lista todos los programas del usuario que ha iniciado sesión.")
     @APIResponse(responseCode = "200", description = "Lista de programas obtenida exitosamente",
             content = @Content(schema = @Schema(implementation = ProgramaDTO.class)))
     @APIResponse(responseCode = "401", description = "No autenticado")
