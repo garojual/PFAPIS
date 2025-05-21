@@ -5,10 +5,7 @@ import com.uq.exception.*;
 import com.uq.mapper.ProfesorMapper;
 import com.uq.security.JWTUtil;
 import com.uq.security.TokenResponse;
-import com.uq.service.ComentarioService;
-import com.uq.service.EjemploService;
-import com.uq.service.ProfesorService;
-import com.uq.service.ProgramaService;
+import com.uq.service.*;
 import jakarta.inject.Inject;
 import jakarta.validation.Valid;
 import jakarta.ws.rs.*;
@@ -17,6 +14,7 @@ import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.SecurityContext;
 import org.eclipse.microprofile.openapi.annotations.Operation;
+import org.eclipse.microprofile.openapi.annotations.enums.SchemaType;
 import org.eclipse.microprofile.openapi.annotations.enums.SecuritySchemeType;
 import org.eclipse.microprofile.openapi.annotations.media.Content;
 import org.eclipse.microprofile.openapi.annotations.media.Schema;
@@ -25,6 +23,7 @@ import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement
 import org.eclipse.microprofile.openapi.annotations.security.SecurityScheme;
 import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -57,6 +56,9 @@ public class ProfesorController {
 
     @Inject
     EjemploService ejemploService;
+
+    @Inject
+    InformeService informeService;
 
 
     @PUT
@@ -529,6 +531,66 @@ public class ProfesorController {
         catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Error inesperado al eliminar ejemplo con ID " + ejemploId, e);
             return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"error\": \"Error en el servidor al eliminar ejemplo.\"}")
+                    .type(MediaType.APPLICATION_JSON).build();
+        }
+    }
+
+    // ******************************************************
+    // --- Lógica para Generar Informes ---
+    // ******************************************************
+
+    // Endpoint para que un profesor genere un informe PDF
+    @GET
+    @Path("/informes")
+    @SecurityRequirement(name = "jwtAuth")
+    @Operation(summary = "Genera un informe de progreso de estudiantes (PDF)", description = "Genera un informe en formato PDF con datos sobre los programas y actividades de los estudiantes. Requiere autenticación como profesor.")
+    @APIResponse(responseCode = "200", description = "Informe PDF generado exitosamente",
+            content = @Content(mediaType = MediaType.APPLICATION_OCTET_STREAM,
+                    schema = @Schema(format = "binary", type = SchemaType.STRING)))
+    @APIResponse(responseCode = "401", description = "No autenticado")
+    @APIResponse(responseCode = "403", description = "No autorizado (el usuario autenticado no es un profesor)")
+    @APIResponse(responseCode = "500", description = "Error en el servidor al generar el informe")
+    @Produces(MediaType.APPLICATION_OCTET_STREAM)
+    @Consumes(MediaType.APPLICATION_JSON)
+    public Response generateInforme(
+    ) {
+        if (securityContext == null || securityContext.getUserPrincipal() == null) {
+            LOGGER.severe("-> generateInforme: Endpoint protegido pero SecurityContext/Principal es null.");
+            return Response.status(Response.Status.UNAUTHORIZED).build();
+        }
+        String authenticatedUserEmail = securityContext.getUserPrincipal().getName();
+        Long authenticatedProfesorId;
+        try {
+            authenticatedProfesorId = profesorService.getIdByEmail(authenticatedUserEmail);
+            LOGGER.info("-> generateInforme: Acceso autorizado para profesor con ID: " + authenticatedProfesorId);
+
+        } catch (UserNotFoundException e) {
+            LOGGER.log(Level.WARNING, "-> generateInforme: Intento de acceso por usuario autenticado pero no encontrado como Profesor: '" + authenticatedUserEmail + "'", e);
+            return Response.status(Response.Status.FORBIDDEN).entity("{\"error\": \"Acceso restringido a profesores.\"}")
+                    .type(MediaType.APPLICATION_JSON).build();
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "-> generateInforme: ERROR inesperado al verificar la identidad del profesor.", e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"error\": \"Error interno al verificar usuario.\"}")
+                    .type(MediaType.APPLICATION_JSON).build();
+        }
+
+        try {
+            // Llamar al servicio para generar el PDF
+            byte[] pdfBytes = informeService.generateStudentProgressReport();
+
+            // Configurar la respuesta para devolver el archivo PDF
+            return Response.ok(pdfBytes)
+                    .header("Content-Disposition", "attachment; filename=\"informe_progreso_estudiantes.pdf\"")
+                    .type(MediaType.APPLICATION_OCTET_STREAM)
+                    .build();
+
+        } catch (IOException e) {
+            LOGGER.log(Level.SEVERE, "Error de I/O al generar o servir el informe PDF.", e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"error\": \"Error en el servidor al generar el informe PDF.\"}")
+                    .type(MediaType.APPLICATION_JSON).build();
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Error inesperado durante la generación del informe.", e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"error\": \"Error en el servidor al generar el informe.\"}")
                     .type(MediaType.APPLICATION_JSON).build();
         }
     }

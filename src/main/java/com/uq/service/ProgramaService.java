@@ -373,4 +373,11 @@ public class ProgramaService {
         // 5. Mapear la entidad actualizada a DTO y retornar
         return programaMapper.toDTO(existingPrograma);
     }
+
+    // Metodo para listar todos los programas (para uso por Profesores/Informes)
+    public List<ProgramaDTO> listAllPrograms() {
+        List<Programa> programas = programaRepository.listAll();
+        LOGGER.log(Level.INFO, "Obtenidos {0} programas (todos) para revisión/informe.", programas.size());
+        return programaMapper.toDTOList(programas);
+    }
 }

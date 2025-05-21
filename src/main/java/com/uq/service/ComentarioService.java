@@ -123,4 +123,11 @@ public class ComentarioService {
         // 6. Mapear la entidad persistida de vuelta a DTO para la respuesta
         return comentarioMapper.toDTO(comentario);
     }
+
+    // Metodo para obtener comentarios para reporte (sin verificación de usuario/rol)
+    public List<ComentarioDTO> listCommentsForProgramNoAuth(Long programaId) {
+        List<Comentario> comentarios = comentarioRepository.listByProgramaId(programaId);
+        LOGGER.log(Level.FINE, "Obtenidos {0} comentarios (no auth) para programa {1}", new Object[]{comentarios.size(), programaId});
+        return comentarioMapper.toDTOList(comentarios);
+    }
 }
