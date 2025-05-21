@@ -1,9 +1,13 @@
 package com.uq.dto;
 
+import com.uq.enums.DifficultyLevel;
 import jakarta.validation.constraints.NotBlank; // Para validaciones
 import lombok.Getter;
 import lombok.Setter;
 import lombok.NoArgsConstructor;
+
+import java.util.HashSet;
+import java.util.Set;
 
 @Getter
 @Setter
@@ -28,6 +32,11 @@ public class EjemploDTO {
     private boolean shared;
 
     private String profesorNombre;
+
+    private Set<String> tags = new HashSet<>(); // Campo para etiquetas (Set de Strings)
+    private DifficultyLevel difficulty; // Campo para el nivel de dificultad (usando el Enum)
+
+    
 
     public boolean isShared() {
         return shared;

@@ -159,6 +159,14 @@ public class EjemploService {
         if (partialEjemploDTO.getDescripcion() != null) existingEjemplo.setDescripcion(partialEjemploDTO.getDescripcion());
         if (partialEjemploDTO.getCodigoFuente() != null) existingEjemplo.setCodigoFuente(partialEjemploDTO.getCodigoFuente());
         if (partialEjemploDTO.getTema() != null) existingEjemplo.setTema(partialEjemploDTO.getTema());
+        if (partialEjemploDTO.getTags() != null) {
+            existingEjemplo.setTags(partialEjemploDTO.getTags());
+        }
+        if (partialEjemploDTO.getDifficulty() != null) {
+            existingEjemplo.setDifficulty(partialEjemploDTO.getDifficulty());
+        }
+
+        existingEjemplo.setShared(partialEjemploDTO.isShared());
 
         LOGGER.log(Level.INFO, "Ejemplo actualizado (parcial) con ID {0} por profesor {1}", new Object[]{ejemploId, authenticatedProfesorId});
         return ejemploMapper.toDTO(existingEjemplo); // Mapear la entidad actualizada
