@@ -109,5 +109,60 @@ public class EmailService {
             LOGGER.log(Level.SEVERE, "Error inesperado al preparar/enviar correo con Jakarta Mail a " + recipientEmail, e);
         }
     }
+    // Metodo para enviar notificación de comentario
+    public void sendCommentNotification(String recipientEmail, String programTitle, Long programId, String professorName, String commentText) {
+        Properties props = getMailProperties();
+        Session session = getMailSession(props);
+
+        try {
+            MimeMessage message = new MimeMessage(session);
+            message.setFrom(new InternetAddress(mailFrom));
+            message.addRecipient(Message.RecipientType.TO, new InternetAddress(recipientEmail));
+            message.setSubject("Nuevo comentario en tu programa '" + programTitle + "'");
+
+            String textBody = "Hola,\n\n" +
+                    "El profesor " + professorName + " ha dejado un comentario en tu programa '" + programTitle + "' (ID: " + programId + ").\n\n" +
+                    "Comentario:\n" +
+                    "--------------------\n" +
+                    commentText + "\n" +
+                    "--------------------\n\n" +
+                    "Inicia sesión en la plataforma para ver el comentario completo y responder si es necesario.\n\n" +
+                    "Atentamente,\n" +
+                    "El Equipo de la Plataforma de Programación UQ";
+
+            message.setText(textBody);
+            Transport.send(message);
+            LOGGER.log(Level.INFO, "Correo de notificación de comentario enviado a {0} para programa {1}", new Object[]{recipientEmail, programId});
+
+        } catch (MessagingException e) {
+            LOGGER.log(Level.SEVERE, "Error al enviar correo de notificación de comentario a " + recipientEmail + " para programa " + programId, e);
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Error inesperado al preparar/enviar correo de notificación de comentario.", e);
+        }
+    }
+
+
+    private Properties getMailProperties() {
+        Properties props = new Properties();
+        props.put("mail.smtp.host", smtpHost);
+        props.put("mail.smtp.port", String.valueOf(smtpPort));
+        props.put("mail.smtp.auth", String.valueOf(smtpAuth));
+        props.put("mail.smtp.starttls.enable", String.valueOf(smtpStartTlsEnable));
+        props.put("mail.smtp.ssl.enable", String.valueOf(smtpSslEnable));
+        return props;
+    }
+
+    private Session getMailSession(Properties props) {
+        if (smtpAuth) {
+            return Session.getInstance(props, new Authenticator() {
+                @Override
+                protected PasswordAuthentication getPasswordAuthentication() {
+                    return new PasswordAuthentication(smtpUsername, smtpPassword);
+                }
+            });
+        } else {
+            return Session.getInstance(props);
+        }
+    }
 
 }
