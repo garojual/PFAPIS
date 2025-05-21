@@ -26,7 +26,7 @@ import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 @Path("/profesores")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
-@Tag(name = "Gestión de Profesores", description = "API para gestionar usuarios, incluyendo login, actualización completa y parcial, eliminación e inicio de sesión para seguridad.")
+@Tag(name = "Gestión de Profesores", description = "API para gestionar profesores.")
 public class ProfesorController {
 
     @Inject

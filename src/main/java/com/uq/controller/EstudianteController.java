@@ -5,6 +5,7 @@ import com.uq.exception.*;
 import com.uq.mapper.EstudianteMapper;
 import com.uq.security.JWTUtil;
 import com.uq.security.TokenResponse;
+import com.uq.service.ComentarioService;
 import com.uq.service.EjemploService;
 import com.uq.service.EstudianteService;
 import com.uq.service.ProgramaService;
@@ -43,7 +44,7 @@ import java.util.logging.Logger;
 @Path("/estudiantes")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
-@Tag(name = "Gestión de Estudiantes", description = "API para gestionar usuarios, incluyendo registro, login, actualización completa y parcial, eliminación e inicio de sesión para seguridad.")
+@Tag(name = "Gestión de Estudiantes", description = "API para gestionar estudiantes.")
 public class EstudianteController {
 
     private static final Logger LOGGER = Logger.getLogger(EstudianteController.class.getName());
@@ -61,6 +62,9 @@ public class EstudianteController {
     SecurityContext securityContext;
 
     EjemploService ejemploService;
+
+    ComentarioService comentarioService; // Inyectar ComentarioService
+
 
 
     // --- Endpoints de Registro, Verificación y Login ---
@@ -751,6 +755,110 @@ public class EstudianteController {
             LOGGER.log(Level.SEVERE, "Error inesperado al obtener ejemplo compartido por ID.", e);
             return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"error\": \"Error en el servidor al obtener ejemplo.\"}")
                     .type(MediaType.APPLICATION_JSON).build();
+        }
+    }
+
+    // ******************************************************
+    // --- Lógica de Retroalimentación (Comentarios y Estado Resuelto) ---
+    // ******************************************************
+
+    // Endpoint para listar comentarios de un programa específico
+    @GET
+    @Path("/programas/{programaId}/comentarios")
+    @SecurityRequirement(name = "jwtAuth")
+    @Operation(summary = "Obtiene los comentarios de un programa", description = "Lista todos los comentarios dejados por profesores en un programa específico. Requiere autenticación y ser el dueño del programa.")
+    @APIResponse(responseCode = "200", description = "Lista de comentarios obtenida exitosamente",
+            content = @Content(schema = @Schema(implementation = ComentarioDTO.class)))
+    @APIResponse(responseCode = "401", description = "No autenticado")
+    @APIResponse(responseCode = "403", description = "No autorizado (el usuario autenticado no es el dueño del programa)")
+    @APIResponse(responseCode = "404", description = "Programa no encontrado")
+    @APIResponse(responseCode = "500", description = "Error en el servidor")
+    @Produces(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.APPLICATION_JSON)
+    public Response getComentariosByProgramaId(
+            @PathParam("programaId") Long programaId
+    ) {
+        // Obtener el ID del usuario autenticado
+        if (securityContext == null || securityContext.getUserPrincipal() == null) {
+            LOGGER.severe("-> getComentariosByProgramaId: Endpoint protegido pero SecurityContext/Principal es null.");
+            return Response.status(Response.Status.UNAUTHORIZED).build();
+        }
+        String authenticatedUserEmail = securityContext.getUserPrincipal().getName();
+        Long authenticatedEstudianteId;
+        try {
+            authenticatedEstudianteId = estudianteService.getIdByEmail(authenticatedUserEmail);
+            if (authenticatedEstudianteId == null) {
+                LOGGER.severe("-> getComentariosByProgramaId: Usuario autenticado con email '" + authenticatedUserEmail + "' no encontrado en DB.");
+                return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"error\": \"Error interno: Usuario autenticado no encontrado.\"}").type(MediaType.APPLICATION_JSON).build();
+            }
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "-> getComentariosByProgramaId: ERROR inesperado al obtener ID del usuario autenticado.", e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"error\": \"Error en el servidor al obtener información del usuario autenticado.\"}").type(MediaType.APPLICATION_JSON).build();
+        }
+
+        try {
+            // Llama al servicio para obtener los comentarios, pasando el ID del programa y el ID del usuario autenticado para verificación
+            List<ComentarioDTO> comentarios = comentarioService.listCommentsForProgram(programaId, authenticatedEstudianteId);
+            return Response.ok(comentarios).build();
+        } catch (ProgramNotFoundException e) {
+            return Response.status(Response.Status.NOT_FOUND).entity("{\"error\": \"" + e.getMessage() + "\"}").type(MediaType.APPLICATION_JSON).build();
+        } catch (UnauthorizedException e) {
+            return Response.status(Response.Status.FORBIDDEN).entity("{\"error\": \"" + e.getMessage() + "\"}").type(MediaType.APPLICATION_JSON).build();
+        }
+        catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Error inesperado al obtener comentarios del programa.", e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"error\": \"Error en el servidor al obtener comentarios.\"}")
+                    .type(MediaType.APPLICATION_JSON).build();
+        }
+    }
+
+    // Endpoint para marcar un programa como resuelto o no resuelto
+    @PUT
+    @Path("/programas/{programaId}/resuelto")
+    @SecurityRequirement(name = "jwtAuth")
+    @Operation(summary = "Marca un programa como resuelto", description = "Cambia el estado 'resuelto' de un programa. Requiere autenticación y ser el dueño.")
+    @APIResponse(responseCode = "200", description = "Estado de resuelto actualizado exitosamente",
+            content = @Content(schema = @Schema(implementation = ProgramaDTO.class)))
+    @APIResponse(responseCode = "400", description = "Cuerpo de solicitud inválido (espera boolean)")
+    @APIResponse(responseCode = "401", description = "No autenticado")
+    @APIResponse(responseCode = "403", description = "No autorizado (el usuario autenticado no es el dueño)")
+    @APIResponse(responseCode = "404", description = "Programa no encontrado")
+    @APIResponse(responseCode = "500", description = "Error en el servidor")
+    @Consumes(MediaType.APPLICATION_JSON) // Consume JSON
+    public Response updateProgramaResueltoStatus(
+            @PathParam("programaId") Long programaId,
+            boolean resueltoStatus
+    ) {
+        // Obtener el ID del usuario autenticado
+        if (securityContext == null || securityContext.getUserPrincipal() == null) {
+            LOGGER.severe("-> updateProgramaResueltoStatus: Endpoint protegido pero SecurityContext/Principal es null.");
+            return Response.status(Response.Status.UNAUTHORIZED).build();
+        }
+        String authenticatedUserEmail = securityContext.getUserPrincipal().getName();
+        Long authenticatedEstudianteId;
+        try {
+            authenticatedEstudianteId = estudianteService.getIdByEmail(authenticatedUserEmail);
+            if (authenticatedEstudianteId == null) {
+                LOGGER.severe("-> updateProgramaResueltoStatus: Usuario autenticado con email '" + authenticatedUserEmail + "' no encontrado en DB.");
+                return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"error\": \"Error interno: Usuario autenticado no encontrado.\"}").type(MediaType.APPLICATION_JSON).build();
+            }
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "-> updateProgramaResueltoStatus: ERROR inesperado al obtener ID del usuario autenticado.", e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"error\": \"Error en el servidor al obtener información del usuario autenticado.\"}").type(MediaType.APPLICATION_JSON).build();
+        }
+
+        try {
+            // Llama al servicio para actualizar el estado 'resuelto'
+            ProgramaDTO updatedPrograma = programaService.markProgramAsResolved(programaId, resueltoStatus, authenticatedEstudianteId);
+            return Response.ok(updatedPrograma).build();
+        } catch (ProgramNotFoundException e) {
+            return Response.status(Response.Status.NOT_FOUND).entity("{\"error\": \"" + e.getMessage() + "\"}").type(MediaType.APPLICATION_JSON).build();
+        } catch (UnauthorizedException e) {
+            return Response.status(Response.Status.FORBIDDEN).entity("{\"error\": \"" + e.getMessage() + "\"}").type(MediaType.APPLICATION_JSON).build();
+        }
+        catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Error inesperado al actualizar estado de resuelto de programa.", e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"error\": \"Error en el servidor al actualizar estado de resuelto.\"}").type(MediaType.APPLICATION_JSON).build();
         }
     }
 

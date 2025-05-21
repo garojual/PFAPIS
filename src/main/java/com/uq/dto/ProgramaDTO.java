@@ -12,7 +12,7 @@ public class ProgramaDTO {
     private String titulo;
     private String descripcion;
     private String codigoFuente;
-    private boolean isResuelto;
+    private boolean isResuelto = false;
     private boolean isShared;
 
     public Long getId() {
