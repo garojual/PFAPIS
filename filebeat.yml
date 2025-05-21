@@ -1,0 +1,16 @@
+filebeat.inputs:
+  - type: log
+    enabled: true
+    paths:
+      - /app/logs/app.log*
+    json.keys_under_root: true
+    json.add_error_key: true
+
+# Configura el template de índice requerido al usar index personalizado
+setup.ilm.enabled: false
+setup.template.name: "quarkus-logs"
+setup.template.pattern: "quarkus-logs-*"
+
+output.elasticsearch:
+  hosts: ["http://elasticsearch:9200"]
+  index: "quarkus-logs-%{+yyyy.MM.dd}"

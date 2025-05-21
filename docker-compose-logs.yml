@@ -1,0 +1,40 @@
+services:
+
+  elasticsearch:
+    image: elasticsearch:8.13.0
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+    ports:
+      - "9200:9200"
+    volumes:
+      - esdata:/usr/share/elasticsearch/data
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - elasticsearch
+    volumes:
+      - grafana-storage:/var/lib/grafana
+
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:8.13.0
+    container_name: filebeat
+    user: root
+    depends_on:
+      - elasticsearch
+    volumes:
+        - ./filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+        - ./logs:/app/logs:ro
+        - filebeat-data:/usr/share/filebeat/data
+    command: ["filebeat", "-e", "-strict.perms=false"]
+
+volumes:
+  esdata:
+  grafana-storage:
+  filebeat-data:
