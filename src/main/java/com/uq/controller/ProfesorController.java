@@ -1,10 +1,7 @@
 package com.uq.controller;
 
 import com.uq.dto.*;
-import com.uq.exception.InactiveAccountException;
-import com.uq.exception.InvalidCredentialsException;
-import com.uq.exception.ProgramNotFoundException;
-import com.uq.exception.UserNotFoundException;
+import com.uq.exception.*;
 import com.uq.mapper.ProfesorMapper;
 import com.uq.security.JWTUtil;
 import com.uq.security.TokenResponse;
@@ -363,6 +360,175 @@ public class ProfesorController {
         catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Error inesperado al crear ejemplo.", e);
             return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"error\": \"Error en el servidor al crear ejemplo.\"}")
+                    .type(MediaType.APPLICATION_JSON).build();
+        }
+    }
+
+    // ******************************************************
+    // --- Lógica de Gestión de Ejemplos (Editar/Eliminar) ---
+    // ******************************************************
+
+    // Endpoint para actualizar un ejemplo completo por su ID (PUT)
+    @PUT
+    @Path("/ejemplos/{ejemploId}")
+    @SecurityRequirement(name = "jwtAuth")
+    @Operation(summary = "Actualiza un ejemplo de código (completo)", description = "Actualiza todos los campos de un ejemplo de código. Requiere autenticación como profesor y ser el dueño.")
+    @APIResponse(responseCode = "200", description = "Ejemplo actualizado exitosamente",
+            content = @Content(schema = @Schema(implementation = EjemploDTO.class)))
+    @APIResponse(responseCode = "400", description = "Datos del ejemplo incompletos o formato inválido")
+    @APIResponse(responseCode = "401", description = "No autenticado")
+    @APIResponse(responseCode = "403", description = "No autorizado (el usuario autenticado no es el dueño)")
+    @APIResponse(responseCode = "404", description = "Ejemplo no encontrado")
+    @APIResponse(responseCode = "500", description = "Error en el servidor")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response updateEjemplo(
+            @PathParam("ejemploId") Long ejemploId,
+            @Valid EjemploDTO request
+    ) {
+        // Lógica de autorización: Verificar que el usuario autenticado es un profesor Y el dueño del ejemplo
+        if (securityContext == null || securityContext.getUserPrincipal() == null) {
+            LOGGER.severe("-> updateEjemplo: Endpoint protegido pero SecurityContext/Principal es null.");
+            return Response.status(Response.Status.UNAUTHORIZED).build();
+        }
+        String authenticatedUserEmail = securityContext.getUserPrincipal().getName();
+        Long authenticatedProfesorId;
+        try {
+            authenticatedProfesorId = profesorService.getIdByEmail(authenticatedUserEmail);
+            LOGGER.info("-> updateEjemplo: Acceso autorizado para profesor con ID: " + authenticatedProfesorId);
+        } catch (UserNotFoundException e) {
+            LOGGER.log(Level.WARNING, "-> updateEjemplo: Intento de acceso por usuario autenticado pero no encontrado como Profesor: '" + authenticatedUserEmail + "'", e);
+            return Response.status(Response.Status.FORBIDDEN).entity("{\"error\": \"Acceso restringido a profesores.\"}")
+                    .type(MediaType.APPLICATION_JSON).build();
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "-> updateEjemplo: ERROR inesperado al verificar la identidad del profesor.", e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"error\": \"Error interno al verificar usuario.\"}")
+                    .type(MediaType.APPLICATION_JSON).build();
+        }
+
+        // Si la autorización como profesor pasa, procedemos a actualizar el ejemplo (el servicio verificará la propiedad)
+        try {
+            EjemploDTO updatedEjemplo = ejemploService.updateExample(ejemploId, request, authenticatedProfesorId);
+            return Response.ok(updatedEjemplo).build(); // 200 OK con el ejemplo actualizado
+
+        } catch (ExampleNotFoundException e) { // El ejemplo no existe
+            return Response.status(Response.Status.NOT_FOUND).entity("{\"error\": \"" + e.getMessage() + "\"}").type(MediaType.APPLICATION_JSON).build();
+        } catch (UnauthorizedException e) { // El profesor no es el dueño (lanzado por el servicio)
+            return Response.status(Response.Status.FORBIDDEN).entity("{\"error\": \"" + e.getMessage() + "\"}").type(MediaType.APPLICATION_JSON).build();
+        } catch (IllegalArgumentException e) { // Validaciones del DTO o del service
+            return Response.status(Response.Status.BAD_REQUEST).entity("{\"error\": \"" + e.getMessage() + "\"}").type(MediaType.APPLICATION_JSON).build();
+        }
+        catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Error inesperado al actualizar ejemplo completo con ID " + ejemploId, e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"error\": \"Error en el servidor al actualizar ejemplo.\"}")
+                    .type(MediaType.APPLICATION_JSON).build();
+        }
+    }
+
+    // Endpoint para actualizar un ejemplo parcialmente por su ID (PATCH)
+    @PATCH
+    @Path("/ejemplos/{ejemploId}")
+    @SecurityRequirement(name = "jwtAuth")
+    @Operation(summary = "Actualiza un ejemplo de código (parcial)", description = "Actualiza campos específicos de un ejemplo de código. Requiere autenticación como profesor y ser el dueño.")
+    @APIResponse(responseCode = "200", description = "Ejemplo actualizado exitosamente",
+            content = @Content(schema = @Schema(implementation = EjemploDTO.class)))
+    @APIResponse(responseCode = "400", description = "Datos del ejemplo incompletos o formato inválido")
+    @APIResponse(responseCode = "401", description = "No autenticado")
+    @APIResponse(responseCode = "403", description = "No autorizado (el usuario autenticado no es el dueño)")
+    @APIResponse(responseCode = "404", description = "Ejemplo no encontrado")
+    @APIResponse(responseCode = "500", description = "Error en el servidor")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response partialUpdateEjemplo(
+            @PathParam("ejemploId") Long ejemploId,
+            EjemploDTO request
+    ) {
+        // Lógica de autorización: Verificar que el usuario autenticado es un profesor Y el dueño del ejemplo
+        if (securityContext == null || securityContext.getUserPrincipal() == null) {
+            LOGGER.severe("-> partialUpdateEjemplo: Endpoint protegido pero SecurityContext/Principal es null.");
+            return Response.status(Response.Status.UNAUTHORIZED).build();
+        }
+        String authenticatedUserEmail = securityContext.getUserPrincipal().getName();
+        Long authenticatedProfesorId;
+        try {
+            authenticatedProfesorId = profesorService.getIdByEmail(authenticatedUserEmail);
+            LOGGER.info("-> partialUpdateEjemplo: Acceso autorizado para profesor con ID: " + authenticatedProfesorId);
+        } catch (UserNotFoundException e) {
+            LOGGER.log(Level.WARNING, "-> partialUpdateEjemplo: Intento de acceso por usuario autenticado pero no encontrado como Profesor: '" + authenticatedUserEmail + "'", e);
+            return Response.status(Response.Status.FORBIDDEN).entity("{\"error\": \"Acceso restringido a profesores.\"}")
+                    .type(MediaType.APPLICATION_JSON).build();
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "-> partialUpdateEjemplo: ERROR inesperado al verificar la identidad del profesor.", e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"error\": \"Error interno al verificar usuario.\"}")
+                    .type(MediaType.APPLICATION_JSON).build();
+        }
+
+        try {
+            EjemploDTO updatedEjemplo = ejemploService.partialUpdateExample(ejemploId, request, authenticatedProfesorId);
+            return Response.ok(updatedEjemplo).build(); // 200 OK con el ejemplo actualizado
+
+        } catch (ExampleNotFoundException e) { // El ejemplo no existe
+            return Response.status(Response.Status.NOT_FOUND).entity("{\"error\": \"" + e.getMessage() + "\"}").type(MediaType.APPLICATION_JSON).build();
+        } catch (UnauthorizedException e) { // El profesor no es el dueño (lanzado por el servicio)
+            return Response.status(Response.Status.FORBIDDEN).entity("{\"error\": \"" + e.getMessage() + "\"}").type(MediaType.APPLICATION_JSON).build();
+        } catch (IllegalArgumentException e) { // Validaciones del DTO o del service
+            return Response.status(Response.Status.BAD_REQUEST).entity("{\"error\": \"" + e.getMessage() + "\"}").type(MediaType.APPLICATION_JSON).build();
+        }
+        catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Error inesperado al actualizar ejemplo parcialmente con ID " + ejemploId, e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"error\": \"Error en el servidor al actualizar ejemplo parcialmente.\"}")
+                    .type(MediaType.APPLICATION_JSON).build();
+        }
+    }
+
+
+    // Endpoint para eliminar un ejemplo por su ID (DELETE)
+    @DELETE
+    @Path("/ejemplos/{ejemploId}")
+    @SecurityRequirement(name = "jwtAuth")
+    @Operation(summary = "Elimina un ejemplo de código", description = "Elimina un ejemplo de código del sistema. Requiere autenticación como profesor y ser el dueño.")
+    @APIResponse(responseCode = "204", description = "Ejemplo eliminado exitosamente")
+    @APIResponse(responseCode = "401", description = "No autenticado")
+    @APIResponse(responseCode = "403", description = "No autorizado (el usuario autenticado no es el dueño)")
+    @APIResponse(responseCode = "404", description = "Ejemplo no encontrado")
+    @APIResponse(responseCode = "500", description = "Error en el servidor")
+    @Produces(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.APPLICATION_JSON)
+    public Response deleteEjemplo(
+            @PathParam("ejemploId") Long ejemploId
+    ) {
+        // Lógica de autorización: Verificar que el usuario autenticado es un profesor Y el dueño del ejemplo
+        if (securityContext == null || securityContext.getUserPrincipal() == null) {
+            LOGGER.severe("-> deleteEjemplo: Endpoint protegido pero SecurityContext/Principal es null.");
+            return Response.status(Response.Status.UNAUTHORIZED).build();
+        }
+        String authenticatedUserEmail = securityContext.getUserPrincipal().getName();
+        Long authenticatedProfesorId;
+        try {
+            authenticatedProfesorId = profesorService.getIdByEmail(authenticatedUserEmail);
+            LOGGER.info("-> deleteEjemplo: Acceso autorizado para profesor con ID: " + authenticatedProfesorId);
+        } catch (UserNotFoundException e) {
+            LOGGER.log(Level.WARNING, "-> deleteEjemplo: Intento de acceso por usuario autenticado pero no encontrado como Profesor: '" + authenticatedUserEmail + "'", e);
+            return Response.status(Response.Status.FORBIDDEN).entity("{\"error\": \"Acceso restringido a profesores.\"}")
+                    .type(MediaType.APPLICATION_JSON).build();
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "-> deleteEjemplo: ERROR inesperado al verificar la identidad del profesor.", e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"error\": \"Error interno al verificar usuario.\"}")
+                    .type(MediaType.APPLICATION_JSON).build();
+        }
+
+        try {
+            ejemploService.deleteExample(ejemploId, authenticatedProfesorId);
+            return Response.noContent().build(); // 204 No Content
+
+        } catch (ExampleNotFoundException e) { // El ejemplo no existe
+            return Response.status(Response.Status.NOT_FOUND).entity("{\"error\": \"" + e.getMessage() + "\"}").type(MediaType.APPLICATION_JSON).build();
+        } catch (UnauthorizedException e) { // El profesor no es el dueño (lanzado por el servicio)
+            return Response.status(Response.Status.FORBIDDEN).entity("{\"error\": \"" + e.getMessage() + "\"}").type(MediaType.APPLICATION_JSON).build();
+        }
+        catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Error inesperado al eliminar ejemplo con ID " + ejemploId, e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"error\": \"Error en el servidor al eliminar ejemplo.\"}")
                     .type(MediaType.APPLICATION_JSON).build();
         }
     }

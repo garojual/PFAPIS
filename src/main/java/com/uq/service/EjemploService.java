@@ -2,6 +2,7 @@ package com.uq.service;
 
 import com.uq.dto.EjemploDTO;
 import com.uq.exception.ExampleNotFoundException;
+import com.uq.exception.UnauthorizedException;
 import com.uq.exception.UserNotFoundException;
 import com.uq.mapper.EjemploMapper;
 import com.uq.model.Ejemplo;
@@ -101,4 +102,92 @@ public class EjemploService {
         // 6. Mapear la entidad persistida de vuelta a DTO para la respuesta
         return ejemploMapper.toDTO(ejemplo);
     }
+
+    // Metodo para actualizar un ejemplo completo por parte de un Profesor (PUT)
+    @Transactional
+    public EjemploDTO updateExample(Long ejemploId, EjemploDTO updatedEjemploDTO, Long authenticatedProfesorId)
+            throws ExampleNotFoundException, UnauthorizedException {
+
+        // 1. Buscar el ejemplo existente
+        Ejemplo existingEjemplo = ejemploRepository.findById(ejemploId);
+
+        // 2. Verificar si el ejemplo existe
+        if (existingEjemplo == null) {
+            throw new ExampleNotFoundException("Ejemplo no encontrado con ID: " + ejemploId);
+        }
+
+        // 3. Lógica de Autorización: Verificar si el usuario autenticado es el dueño del ejemplo
+        if (existingEjemplo.getProfesor() == null || !existingEjemplo.getProfesor().getId().equals(authenticatedProfesorId)) {
+            LOGGER.log(Level.WARNING, "Intento de actualización (PUT) no autorizada del ejemplo {0} por profesor {1}", new Object[]{ejemploId, authenticatedProfesorId});
+            throw new UnauthorizedException("No tienes permiso para actualizar este ejemplo.");
+        }
+        LOGGER.log(Level.INFO, "Actualización (PUT) autorizada del ejemplo {0} por profesor {1}", new Object[]{ejemploId, authenticatedProfesorId});
+
+
+        // 4. Usar el mapper para actualizar la entidad existente desde el DTO completo
+        ejemploMapper.updateEntityFromDto(updatedEjemploDTO, existingEjemplo);
+
+        LOGGER.log(Level.INFO, "Ejemplo actualizado (completo) con ID {0} por profesor {1}", new Object[]{ejemploId, authenticatedProfesorId});
+        return ejemploMapper.toDTO(existingEjemplo); // Mapear la entidad actualizada de vuelta a DTO
+    }
+
+
+    // Metodo para actualizar un ejemplo parcialmente por parte de un Profesor (PATCH)
+    @Transactional
+    public EjemploDTO partialUpdateExample(Long ejemploId, EjemploDTO partialEjemploDTO, Long authenticatedProfesorId)
+            throws ExampleNotFoundException, UnauthorizedException {
+
+        // 1. Buscar el ejemplo existente
+        Ejemplo existingEjemplo = ejemploRepository.findById(ejemploId);
+
+        // 2. Verificar si el ejemplo existe
+        if (existingEjemplo == null) {
+            throw new ExampleNotFoundException("Ejemplo no encontrado con ID: " + ejemploId);
+        }
+
+        // 3. Lógica de Autorización: Verificar si el usuario autenticado es el dueño del ejemplo
+        if (existingEjemplo.getProfesor() == null || !existingEjemplo.getProfesor().getId().equals(authenticatedProfesorId)) {
+            LOGGER.log(Level.WARNING, "Intento de actualización parcial (PATCH) no autorizada del ejemplo {0} por profesor {1}", new Object[]{ejemploId, authenticatedProfesorId});
+            throw new UnauthorizedException("No tienes permiso para actualizar este ejemplo.");
+        }
+        LOGGER.log(Level.INFO, "Actualización parcial (PATCH) autorizada del ejemplo {0} por profesor {1}", new Object[]{ejemploId, authenticatedProfesorId});
+
+
+        // 4. Actualizar solo los campos no nulos del DTO parcial
+        // PATCH requiere lógica explícita para actualizar solo los campos proporcionados.
+        if (partialEjemploDTO.getTitulo() != null) existingEjemplo.setTitulo(partialEjemploDTO.getTitulo());
+        if (partialEjemploDTO.getDescripcion() != null) existingEjemplo.setDescripcion(partialEjemploDTO.getDescripcion());
+        if (partialEjemploDTO.getCodigoFuente() != null) existingEjemplo.setCodigoFuente(partialEjemploDTO.getCodigoFuente());
+        if (partialEjemploDTO.getTema() != null) existingEjemplo.setTema(partialEjemploDTO.getTema());
+
+        LOGGER.log(Level.INFO, "Ejemplo actualizado (parcial) con ID {0} por profesor {1}", new Object[]{ejemploId, authenticatedProfesorId});
+        return ejemploMapper.toDTO(existingEjemplo); // Mapear la entidad actualizada
+    }
+
+
+    // Metodo para eliminar un ejemplo por parte de un Profesor (DELETE)
+    @Transactional
+    public void deleteExample(Long ejemploId, Long authenticatedProfesorId)
+            throws ExampleNotFoundException, UnauthorizedException {
+
+        // 1. Buscar el ejemplo existente
+        Ejemplo existingEjemplo = ejemploRepository.findById(ejemploId);
+
+        // 2. Verificar si el ejemplo existe
+        if (existingEjemplo == null) {
+            throw new ExampleNotFoundException("Ejemplo no encontrado con ID: " + ejemploId);
+        }
+
+        // 3. Lógica de Autorización: Verificar si el usuario autenticado es el dueño del ejemplo
+        if (existingEjemplo.getProfesor() == null || !existingEjemplo.getProfesor().getId().equals(authenticatedProfesorId)) {
+            LOGGER.log(Level.WARNING, "Intento de eliminación no autorizada del ejemplo {0} por profesor {1}", new Object[]{ejemploId, authenticatedProfesorId});
+            throw new UnauthorizedException("No tienes permiso para eliminar este ejemplo.");
+        }
+        LOGGER.log(Level.INFO, "Eliminación autorizada del ejemplo {0} por profesor {1}", new Object[]{ejemploId, authenticatedProfesorId});
+
+
+        // 4. Eliminar el ejemplo
+        ejemploRepository.delete(existingEjemplo);
+    }
+
 }
