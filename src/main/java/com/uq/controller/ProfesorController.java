@@ -3,10 +3,12 @@ package com.uq.controller;
 import com.uq.dto.*;
 import com.uq.exception.InactiveAccountException;
 import com.uq.exception.InvalidCredentialsException;
+import com.uq.exception.ProgramNotFoundException;
 import com.uq.exception.UserNotFoundException;
 import com.uq.mapper.ProfesorMapper;
 import com.uq.security.JWTUtil;
 import com.uq.security.TokenResponse;
+import com.uq.service.ComentarioService;
 import com.uq.service.ProfesorService;
 import com.uq.service.ProgramaService;
 import jakarta.inject.Inject;
@@ -53,7 +55,7 @@ public class ProfesorController {
     SecurityContext securityContext;
 
     @Inject
-    ProgramaService programaService;
+    ComentarioService comentarioService;
 
 
     @PUT
@@ -224,7 +226,7 @@ public class ProfesorController {
 
         // Si la autorización pasa, procedemos a obtener todos los programas
         try {
-            // Llamar al servicio (ProgramaService) para obtener *todos* los programas
+            // Llamar al servicio (ProgramaService) para obtener todos los programas
             List<ProgramaDTO> programas = profesorService.listAllPrograms();
             return Response.ok(programas).build(); // Retorna la lista de programas
 
@@ -232,6 +234,73 @@ public class ProfesorController {
             // Captura cualquier error durante la obtención de programas
             LOGGER.log(Level.SEVERE, "Error inesperado al obtener todos los programas de estudiantes.", e);
             return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"error\": \"Error en el servidor al obtener los programas.\"}")
+                    .type(MediaType.APPLICATION_JSON).build();
+        }
+    }
+
+    // ******************************************************
+    // --- Lógica de Revisión de Programas (Añadir Comentarios) ---
+    // ******************************************************
+
+    // Endpoint para que un profesor añada un comentario a un programa específico
+    @POST
+    @Path("/programas/{programaId}/comentarios")
+    @SecurityRequirement(name = "jwtAuth")
+    @Operation(summary = "Añade un comentario a un programa de estudiante", description = "Permite a un profesor dejar un comentario en el código de un programa de estudiante. Requiere autenticación como profesor.")
+    @APIResponse(responseCode = "201", description = "Comentario creado exitosamente",
+            content = @Content(schema = @Schema(implementation = ComentarioDTO.class)))
+    @APIResponse(responseCode = "400", description = "Datos del comentario incompletos o formato inválido")
+    @APIResponse(responseCode = "401", description = "No autenticado")
+    @APIResponse(responseCode = "403", description = "No autorizado (el usuario autenticado no es un profesor)")
+    @APIResponse(responseCode = "404", description = "Programa no encontrado")
+    @APIResponse(responseCode = "500", description = "Error en el servidor")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public Response addComentarioToPrograma(
+            @PathParam("programaId") Long programaId,
+            @Valid ComentarioRequestDTO request
+    ) {
+        // Lógica de autorización: Verificar que el usuario autenticado es un profesor.
+        if (securityContext == null || securityContext.getUserPrincipal() == null) {
+            LOGGER.severe("-> addComentarioToPrograma: Endpoint protegido pero SecurityContext/Principal es null.");
+            return Response.status(Response.Status.UNAUTHORIZED).build();
+        }
+        String authenticatedUserEmail = securityContext.getUserPrincipal().getName();
+        Long authenticatedProfesorId;
+        try {
+            authenticatedProfesorId = profesorService.getIdByEmail(authenticatedUserEmail);
+            LOGGER.info("-> addComentarioToPrograma: Acceso autorizado para profesor con ID: " + authenticatedProfesorId);
+
+        } catch (UserNotFoundException e) {
+            LOGGER.log(Level.WARNING, "-> addComentarioToPrograma: Intento de acceso por usuario autenticado pero no encontrado como Profesor: '" + authenticatedUserEmail + "'", e);
+            return Response.status(Response.Status.FORBIDDEN).entity("{\"error\": \"Acceso restringido a profesores.\"}")
+                    .type(MediaType.APPLICATION_JSON).build();
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "-> addComentarioToPrograma: ERROR inesperado al verificar la identidad del profesor.", e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"error\": \"Error interno al verificar usuario.\"}")
+                    .type(MediaType.APPLICATION_JSON).build();
+        }
+
+        // Si la autorización como profesor pasa, procedemos a añadir el comentario
+        try {
+            // Llamar al servicio para añadir el comentario
+            ComentarioDTO createdComentario = comentarioService.addCommentByProfessor(
+                    programaId,
+                    authenticatedProfesorId,
+                    request.getTexto()
+            );
+            return Response.status(Response.Status.CREATED).entity(createdComentario).build();
+
+        } catch (ProgramNotFoundException e) {
+            // El programa no existe
+            return Response.status(Response.Status.NOT_FOUND).entity("{\"error\": \"" + e.getMessage() + "\"}").type(MediaType.APPLICATION_JSON).build();
+        } catch (UserNotFoundException e) {
+            LOGGER.log(Level.SEVERE, "Profesor " + authenticatedProfesorId + " no encontrado en DB durante addCommentByProfessor.", e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"error\": \"Error interno: Profesor comentando no encontrado.\"}").type(MediaType.APPLICATION_JSON).build();
+        }
+        catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Error inesperado al añadir comentario al programa " + programaId, e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"error\": \"Error en el servidor al añadir comentario.\"}")
                     .type(MediaType.APPLICATION_JSON).build();
         }
     }

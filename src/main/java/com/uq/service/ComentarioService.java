@@ -6,6 +6,7 @@ import com.uq.exception.UnauthorizedException;
 import com.uq.exception.UserNotFoundException;
 import com.uq.mapper.ComentarioMapper;
 import com.uq.model.Comentario;
+import com.uq.model.Estudiante;
 import com.uq.model.Profesor;
 import com.uq.model.Programa;
 import com.uq.repository.ComentarioRepository;
@@ -122,5 +123,4 @@ public class ComentarioService {
         // 6. Mapear la entidad persistida de vuelta a DTO para la respuesta
         return comentarioMapper.toDTO(comentario);
     }
-
 }
