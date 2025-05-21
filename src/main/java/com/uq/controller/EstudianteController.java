@@ -5,6 +5,7 @@ import com.uq.exception.*;
 import com.uq.mapper.EstudianteMapper;
 import com.uq.security.JWTUtil;
 import com.uq.security.TokenResponse;
+import com.uq.service.EjemploService;
 import com.uq.service.EstudianteService;
 import com.uq.service.ProgramaService;
 import jakarta.inject.Inject;
@@ -20,6 +21,7 @@ import org.eclipse.microprofile.openapi.annotations.enums.SecuritySchemeType;
 import org.eclipse.microprofile.openapi.annotations.media.Content;
 import org.eclipse.microprofile.openapi.annotations.media.ExampleObject;
 import org.eclipse.microprofile.openapi.annotations.media.Schema;
+import org.eclipse.microprofile.openapi.annotations.parameters.Parameter;
 import org.eclipse.microprofile.openapi.annotations.parameters.RequestBody;
 import org.eclipse.microprofile.openapi.annotations.responses.APIResponse;
 import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
@@ -57,6 +59,8 @@ public class EstudianteController {
 
     @Context
     SecurityContext securityContext;
+
+    EjemploService ejemploService;
 
 
     // --- Endpoints de Registro, Verificación y Login ---
@@ -685,4 +689,69 @@ public class EstudianteController {
                     .type(MediaType.APPLICATION_JSON).build();
         }
     }
+
+    // ******************************************************
+    // --- Lógica de Exploración de Ejemplos ---
+    // ******************************************************
+
+    // Endpoint para listar todos los ejemplos COMPARTIDOS (opcionalmente filtrados por tema)
+    @GET
+    @Path("/ejemplos")
+    @SecurityRequirement(name = "jwtAuth")
+    @Operation(summary = "Obtiene la lista de ejemplos de código compartidos", description = "Lista todos los ejemplos de código que han sido marcados como compartidos por los profesores. Opcionalmente filtra por tema.")
+    @APIResponse(responseCode = "200", description = "Lista de ejemplos obtenida exitosamente",
+            content = @Content(schema = @Schema(implementation = EjemploDTO.class)))
+    @APIResponse(responseCode = "401", description = "No autenticado")
+    @APIResponse(responseCode = "500", description = "Error en el servidor")
+    @Produces(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.APPLICATION_JSON)
+    public Response listSharedExamples(
+            @QueryParam("tema") @Parameter(description = "Filtra ejemplos por tema") String tema // Parámetro opcional para filtrar por tema
+    ) {
+
+        try {
+            List<EjemploDTO> ejemplos;
+            if (tema != null && !tema.trim().isEmpty()) {
+                // Si se proporciona un tema, filtrar por tema
+                ejemplos = ejemploService.listSharedExamplesByTema(tema);
+            } else {
+                // Si no hay tema, listar todos los compartidos
+                ejemplos = ejemploService.listAllSharedExamples();
+            }
+            return Response.ok(ejemplos).build();
+        } catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Error inesperado al obtener la lista de ejemplos compartidos.", e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"error\": \"Error en el servidor al obtener ejemplos.\"}")
+                    .type(MediaType.APPLICATION_JSON).build();
+        }
+    }
+
+    // Endpoint para obtener los detalles de un ejemplo COMPARTIDO por su ID
+    @GET
+    @Path("/ejemplos/{ejemploId}")
+    @SecurityRequirement(name = "jwtAuth")
+    @Operation(summary = "Obtiene los detalles de un ejemplo de código compartido", description = "Retorna la información completa de un ejemplo específico, si está compartido.")
+    @APIResponse(responseCode = "200", description = "Ejemplo encontrado exitosamente",
+            content = @Content(schema = @Schema(implementation = EjemploDTO.class)))
+    @APIResponse(responseCode = "401", description = "No autenticado")
+    @APIResponse(responseCode = "404", description = "Ejemplo no encontrado o no compartido")
+    @APIResponse(responseCode = "500", description = "Error en el servidor")
+    @Produces(MediaType.APPLICATION_JSON)
+    @Consumes(MediaType.APPLICATION_JSON)
+    public Response getSharedExampleById(
+            @PathParam("ejemploId") Long ejemploId
+    ) {
+        try {
+            EjemploDTO ejemplo = ejemploService.getSharedExampleById(ejemploId);
+            return Response.ok(ejemplo).build();
+        } catch (ExampleNotFoundException e) {
+            return Response.status(Response.Status.NOT_FOUND).entity("{\"error\": \"" + e.getMessage() + "\"}").type(MediaType.APPLICATION_JSON).build();
+        }
+        catch (Exception e) {
+            LOGGER.log(Level.SEVERE, "Error inesperado al obtener ejemplo compartido por ID.", e);
+            return Response.status(Response.Status.INTERNAL_SERVER_ERROR).entity("{\"error\": \"Error en el servidor al obtener ejemplo.\"}")
+                    .type(MediaType.APPLICATION_JSON).build();
+        }
+    }
+
 }

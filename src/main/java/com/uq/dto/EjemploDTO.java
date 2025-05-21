@@ -6,9 +6,10 @@ import lombok.Setter;
 @Getter
 @Setter
 public class EjemploDTO {
+    private Long id;
     private String titulo;
     private String descripcion;
     private String codigo;
-    private String categoria;
-    private String nivel;
+    private String tema;
+
 }
