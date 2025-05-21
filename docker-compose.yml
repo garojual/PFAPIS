@@ -1,0 +1,63 @@
+services:
+  # Servicio de PostgreSQL
+  postgres:
+    image: postgres:15
+    container_name: quarkus-postgres
+    environment:
+      POSTGRES_DB: bd_uq
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: root
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - quarkus-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U root -d bd_uq"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Servicio de la aplicación Quarkus con Java 23
+  quarkus-app:
+    # En lugar de build, especificamos una imagen base con Java 23
+    image: eclipse-temurin:23-jre
+    # build:
+    #   context: .
+    #   dockerfile: src/main/docker/Dockerfile.jvm
+    container_name: quarkus-app
+    environment:
+      # Configuración de la base de datos
+      QUARKUS_DATASOURCE_DB_KIND: postgresql
+      QUARKUS_DATASOURCE_USERNAME: root
+      QUARKUS_DATASOURCE_PASSWORD: root
+      QUARKUS_DATASOURCE_JDBC_URL: jdbc:postgresql://postgres:5432/bd_uq
+      # Configuración de Hibernate
+      QUARKUS_HIBERNATE_ORM_DATABASE_GENERATION: update
+      QUARKUS_HIBERNATE_ORM_LOG_SQL: "true"
+      # Configuración del servidor SMTP (Jakarta Mail)
+      MAIL_SMTP_HOST: smtp.gmail.com
+      MAIL_SMTP_PORT: 587
+      MAIL_SMTP_AUTH: "true"
+      MAIL_SMTP_STARTTLS_ENABLE: "true"
+      MAIL_SMTP_SSL_ENABLE: "false"
+      MAIL_SMTP_USERNAME: ${MAIL_USERNAME}
+      MAIL_SMTP_PASSWORD: ${MAIL_PASSWORD}
+    volumes:
+      - ./target/quarkus-app:/deployments  # Monta tu aplicación compilada
+    command: ["java", "-jar", "/deployments/quarkus-run.jar"]
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - quarkus-net
+
+networks:
+  quarkus-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
