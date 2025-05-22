@@ -29,22 +29,12 @@ pipeline {
     }
 
     stage('Levantar Quarkus') {
-      steps {
-        echo 'Iniciando Quarkus en segundo plano...'
-        sh '''
-          export QUARKUS_DATASOURCE_JDBC_URL=jdbc:postgresql://postgres1:5432/bd_uq
-          nohup mvn quarkus:dev -Dquarkus.http.host=0.0.0.0 > quarkus.log 2>&1 & echo $! > quarkus.pid
-          sleep 15
-
-          # Verificar que Quarkus esté disponible
-          until curl -f http://localhost:8080/q/health || nc -z localhost 8080; do
-            echo "Esperando Quarkus..."
-            sleep 2
-          done
-          echo "Quarkus está disponible"
-        '''
-      }
-    }
+          steps {
+            echo 'Iniciando Quarkus en segundo plano...'
+            sh 'nohup mvn quarkus:dev > quarkus.log 2>&1 & echo $! > quarkus.pid'
+            sh 'sleep 20' // Ajusta el tiempo si el servidor tarda más en levantar
+          }
+        }
 
     stage('Ejecutar pruebas') {
       steps {
