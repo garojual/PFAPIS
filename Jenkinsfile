@@ -18,14 +18,12 @@ pipeline {
 
     stage('Levantar servicios') {
       steps {
-        echo 'Asegurando que los servicios estén disponibles...'
-        // Verificar que postgres esté disponible
+        echo 'Verificando disponibilidad de servicios...'
         sh '''
-          until nc -z postgres1 5432; do
-            echo "Esperando PostgreSQL..."
-            sleep 2
-          done
-          echo "PostgreSQL está disponible"
+          echo "Esperando a que PostgreSQL esté disponible..."
+          # Usar telnet en lugar de nc, o simplemente esperar un tiempo fijo
+          sleep 20
+          echo "Asumiendo que PostgreSQL está disponible"
         '''
       }
     }
