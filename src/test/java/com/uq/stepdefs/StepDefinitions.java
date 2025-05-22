@@ -47,7 +47,7 @@ public class StepDefinitions {
 
     @Given("la API está disponible")
     public void la_api_esta_disponible() {
-        baseURI = "http://localhost:8080";
+        baseURI = "http://quarkus-app:8080";
     }
 
     @Given("estoy autenticado como profesor con email {string} y contraseña {string}")
