@@ -16,6 +16,15 @@ pipeline {
       }
     }
 
+    stage('Levantar Quarkus') {
+          steps {
+            echo 'Iniciando Quarkus en segundo plano...'
+            sh 'nohup mvn quarkus:dev > quarkus.log 2>&1 & echo $! > quarkus.pid'
+            sh 'sleep 10' // Ajusta el tiempo si el servidor tarda más en levantar
+          }
+        }
+
+
     stage('Ejecutar pruebas') {
       steps {
         echo 'Ejecutando pruebas de integración...'
@@ -31,5 +40,27 @@ pipeline {
         }
       }
     }
+
+    stage('Detener Quarkus') {
+          steps {
+            echo 'Deteniendo Quarkus...'
+            sh '''
+              if [ -f quarkus.pid ]; then
+                kill -9 $(cat quarkus.pid) || true
+                rm quarkus.pid
+              fi
+            '''
+          }
+        }
+      }
+
+      post {
+        always {
+          echo 'Limpieza final'
+          sh 'pkill -f quarkus:dev || true'
+        }
+      }
+
+
   }
 }
