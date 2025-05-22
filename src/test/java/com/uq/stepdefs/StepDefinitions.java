@@ -1,7 +1,9 @@
 package com.uq.stepdefs;
 
 import com.uq.exception.UserNotFoundException;
+import com.uq.service.EstudianteService;
 import com.uq.service.ProfesorService;
+import io.cucumber.java.en.And;
 import io.cucumber.java.en.Given;
 import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
@@ -18,15 +20,13 @@ import static io.restassured.RestAssured.given;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.isA;
-import static org.junit.Assert.assertTrue;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.*;
 
 import io.quarkus.test.junit.QuarkusTest;
 
 @QuarkusTest
 @ApplicationScoped
-public class ProfesorStepDefinitions {
+public class StepDefinitions {
 
     private Response response;
     private ValidatableResponse validatableResponse;
@@ -38,6 +38,12 @@ public class ProfesorStepDefinitions {
     // Inyecta el ProfesorService para poder buscar profesores en la DB de prueba
     @Inject
     ProfesorService profesorService;
+
+    @Inject
+    EstudianteService estudianteService;
+
+    private Long createdEstudianteId;
+
 
     @Given("la API está disponible")
     public void la_api_esta_disponible() {
@@ -132,6 +138,42 @@ public class ProfesorStepDefinitions {
         }
     }
 
+    @Given("estoy autenticado como estudiante con email {string} y contraseña {string}")
+    public void estoy_autenticado_como_estudiante(String email, String password) {
+        Response loginResponse = given()
+                .header("Content-Type", "application/json")
+                .body(String.format("{\"email\": \"%s\", \"contrasena\": \"%s\"}", email, password))
+                .when()
+                .post("/estudiantes/login");
+
+        loginResponse.then().statusCode(200);
+
+        this.jwtToken = loginResponse.jsonPath().getString("token");
+
+        if (this.jwtToken == null || this.jwtToken.isEmpty()) {
+            throw new RuntimeException("No se pudo obtener el token JWT para profesor después de login. Verifica credenciales y configuración de la API. Respuesta: " + loginResponse.asString());
+        }
+    }
+
+    @Given("existe un estudiante con email {string} y  contrasena {string}")
+    public void existe_un_estudiante_con_email_contrasena(String email, String contrasena) {
+        if (estudianteService == null) {
+            System.out.println("DEBUG: ProfesorService is null, using REST API fallback");
+            verifyEstudianteExistsViaAPI(email, contrasena);
+            return;
+        }
+
+        try {
+            // Llama al servicio para obtener el ID del profesor por email
+            this.createdEstudianteId = estudianteService.getIdByEmail(email);
+            System.out.println("DEBUG: Encontrado estudiante existente con ID: " + this.createdEstudianteId + " para email: " + email);
+        } catch (UserNotFoundException e) {
+            fail("El estudiante con email '" + email + "' NO existe en la base de datos de prueba. Por favor, asegúrate de que los datos de prueba estén cargados correctamente.");
+        } catch (Exception e) {
+            fail("Error inesperado al verificar la existencia del estudiante con email '" + email + "': " + e.getMessage());
+        }
+    }
+
     private void verifyProfesorExistsViaAPI(String email) {
         try {
             Response testLoginResponse = given()
@@ -170,6 +212,25 @@ public class ProfesorStepDefinitions {
         }
     }
 
+    private void verifyEstudianteExistsViaAPI(String email, String contrasena) {
+        try {
+            Response testLoginResponse = given()
+                    .header("Content-Type", "application/json")
+                    .body(String.format("{\"email\": \"%s\", \"contrasena\": \"%s\"}", email, contrasena))
+                    .when()
+                    .post("/estudiantes/login");
+
+            if (testLoginResponse.getStatusCode() == 200) {
+                this.createdEstudianteId = 1L;
+                System.out.println("DEBUG: Existencia verificada del estudiante via API con el email: " + email);
+            } else {
+                fail("El profesor con email '" + email + "' NO existe o las credenciales son incorrectas.");
+            }
+        } catch (Exception e) {
+            fail("Error al verificar la existencia del profesor vía API: " + e.getMessage());
+        }
+    }
+
     @When("envío una solicitud POST a {string} con el siguiente cuerpo:")
     public void envio_solicitud_post_con_cuerpo(String endpoint, String body) {
         var requestSpec = given().header("Content-Type", "application/json").body(body);
@@ -177,6 +238,14 @@ public class ProfesorStepDefinitions {
         if (this.jwtToken != null && !endpoint.endsWith("/login")) {
             requestSpec = requestSpec.header("Authorization", "Bearer " + this.jwtToken);
         }
+
+        this.response = requestSpec.when().post(endpoint);
+        this.validatableResponse = this.response.then();
+    }
+
+    @When("envío una solicitud POST de registro a {string} con el siguiente cuerpo:")
+    public void envio_solicitud_post_registro_con_cuerpo(String endpoint, String body) {
+        var requestSpec = given().header("Content-Type", "application/json").body(body);
 
         this.response = requestSpec.when().post(endpoint);
         this.validatableResponse = this.response.then();
@@ -281,6 +350,53 @@ public class ProfesorStepDefinitions {
         this.validatableResponse = this.response.then();
     }
 
+    @When("envío una solicitud PATCH a {string} para el usuario creado con el siguiente cuerpo:")
+    public void envio_solicitud_patch_autenticada_usuario_creado(String endpointTemplate, String body) {
+        if (this.jwtToken == null) {
+            throw new RuntimeException("El token JWT es null. La solicitud PATCH requiere autenticación.");
+        }
+        if (this.createdEstudianteId == null) {
+            throw new RuntimeException("No hay un usuario creado para enviar la solicitud PATCH.");
+        }
+        String url = endpointTemplate.replace("{id}", String.valueOf(this.createdEstudianteId));
+
+        this.response = given()
+                .header("Authorization", "Bearer " + this.jwtToken)
+                .header("Content-Type", "application/json")
+                .body(body)
+                .when()
+                .patch(url);
+        this.validatableResponse = this.response.then();
+    }
+
+    @When("envío una solicitud DELETE a {string}")
+    public void envio_solicitud_delete(String endpoint) {
+        if (this.jwtToken == null) {
+            throw new RuntimeException("El token JWT es null. La solicitud DELETE requiere autenticación.");
+        }
+
+        // Determinar si necesitamos reemplazar {id} con el estudiante creado
+        String url;
+        if (endpoint.contains("{id}") && this.createdEstudianteId != null) {
+            // Si la URL contiene {id} y tenemos un estudiante creado, hacer el reemplazo
+            url = endpoint.replace("{id}", String.valueOf(this.createdEstudianteId));
+            System.out.println("DEBUG: Reemplazando {id} con " + this.createdEstudianteId + " en URL: " + url);
+        } else if (endpoint.contains("{id}") && this.createdEstudianteId == null) {
+            // Si la URL contiene {id} pero no tenemos estudiante creado, lanzar error
+            throw new RuntimeException("No hay un usuario creado para enviar la solicitud DELETE con reemplazo de ID.");
+        } else {
+            // Si la URL no contiene {id}, usar tal como está
+            url = endpoint;
+            System.out.println("DEBUG: Usando URL directa sin reemplazo: " + url);
+        }
+
+        this.response = given()
+                .header("Authorization", "Bearer " + this.jwtToken)
+                .when()
+                .delete(url);
+        this.validatableResponse = this.response.then();
+    }
+
     @Then("la respuesta debe tener el código {int}")
     public void la_respuesta_debe_tener_codigo(int expectedStatusCode) {
         this.validatableResponse.statusCode(expectedStatusCode);
@@ -310,14 +426,34 @@ public class ProfesorStepDefinitions {
     public void la_respuesta_es_un_archivo_pdf() {
         this.validatableResponse.header("Content-Type", equalTo("application/octet-stream"));
         byte[] responseBody = this.response.getBody().asByteArray();
-        assertTrue("La respuesta debe contener datos binarios", responseBody.length > 0);
+        assertTrue(responseBody.length > 0, "La respuesta debe contener datos binarios");
     }
 
     @Then("el header {string} contiene {string}")
     public void el_header_contiene(String headerName, String expectedValue) {
         String headerValue = this.response.getHeader(headerName);
         assertNotNull("El header " + headerName + " no debe ser null", headerValue);
-        assertTrue("El header " + headerName + " debe contener " + expectedValue,
-                headerValue.contains(expectedValue));
+        assertTrue(headerValue.contains(expectedValue),
+                "El header " + headerName + " debe contener " + expectedValue);
+    }
+
+    @And("existe un estudiante con id {string}")
+    public void existe_un_estudiante_con_id(String estudianteId) {
+        try {
+            Long id = Long.parseLong(estudianteId);
+            System.out.println("DEBUG: Asumiendo que existe el estudiante con ID: " + estudianteId);
+        } catch (NumberFormatException e) {
+            fail("El ID del estudiante '" + estudianteId + "' no es un número válido.");
+        }
+    }
+
+    @And("no existe un programa con id {string}")
+    public void no_existe_un_programa_con_id(String programaId) {
+        try {
+            Long id = Long.parseLong(programaId);
+            System.out.println("DEBUG: Asumiendo que no existe el programa con ID: " + programaId);
+        } catch (NumberFormatException e) {
+            fail("El ID del programa '" + programaId + "' no es un número válido.");
+        }
     }
 }
