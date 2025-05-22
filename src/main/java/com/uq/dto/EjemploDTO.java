@@ -36,7 +36,69 @@ public class EjemploDTO {
     private Set<String> tags = new HashSet<>(); // Campo para etiquetas (Set de Strings)
     private DifficultyLevel difficulty; // Campo para el nivel de dificultad (usando el Enum)
 
-    
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public String getTitulo() {
+        return titulo;
+    }
+
+    public void setTitulo(String titulo) {
+        this.titulo = titulo;
+    }
+
+    public String getDescripcion() {
+        return descripcion;
+    }
+
+    public void setDescripcion(String descripcion) {
+        this.descripcion = descripcion;
+    }
+
+    public String getCodigoFuente() {
+        return codigoFuente;
+    }
+
+    public void setCodigoFuente(String codigoFuente) {
+        this.codigoFuente = codigoFuente;
+    }
+
+    public String getTema() {
+        return tema;
+    }
+
+    public void setTema(String tema) {
+        this.tema = tema;
+    }
+
+    public String getProfesorNombre() {
+        return profesorNombre;
+    }
+
+    public void setProfesorNombre(String profesorNombre) {
+        this.profesorNombre = profesorNombre;
+    }
+
+    public Set<String> getTags() {
+        return tags;
+    }
+
+    public void setTags(Set<String> tags) {
+        this.tags = tags;
+    }
+
+    public DifficultyLevel getDifficulty() {
+        return difficulty;
+    }
+
+    public void setDifficulty(DifficultyLevel difficulty) {
+        this.difficulty = difficulty;
+    }
 
     public boolean isShared() {
         return shared;

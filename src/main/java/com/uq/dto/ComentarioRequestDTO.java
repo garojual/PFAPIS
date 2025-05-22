@@ -11,4 +11,12 @@ import lombok.NoArgsConstructor;
 public class ComentarioRequestDTO {
     @NotBlank(message = "El texto del comentario no puede estar vacío")
     private String texto;
+
+    public String getTexto() {
+        return texto;
+    }
+
+    public void setTexto(String texto) {
+        this.texto = texto;
+    }
 }
