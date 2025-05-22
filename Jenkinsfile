@@ -21,26 +21,62 @@ pipeline {
         echo 'Verificando disponibilidad de servicios...'
         sh '''
           echo "Esperando a que PostgreSQL esté disponible..."
-          # Usar telnet en lugar de nc, o simplemente esperar un tiempo fijo
           sleep 20
-          echo "Asumiendo que PostgreSQL está disponible"
+          echo "PostgreSQL debería estar disponible"
         '''
       }
     }
 
     stage('Levantar Quarkus') {
-          steps {
-            echo 'Iniciando Quarkus en segundo plano...'
-            sh 'nohup mvn quarkus:dev > quarkus.log 2>&1 & echo $! > quarkus.pid'
-            sh 'sleep 20' // Ajusta el tiempo si el servidor tarda más en levantar
-          }
-        }
+      steps {
+        echo 'Iniciando Quarkus en segundo plano...'
+        sh '''
+          # Limpiar procesos anteriores
+          pkill -f quarkus:dev || true
+
+          # Configurar variables de entorno para la conexión a BD
+          export QUARKUS_DATASOURCE_JDBC_URL=jdbc:postgresql://postgres1:5432/bd_uq
+          export QUARKUS_HTTP_HOST=0.0.0.0
+
+          # Iniciar Quarkus
+          nohup mvn quarkus:dev -Dquarkus.http.host=0.0.0.0 > quarkus.log 2>&1 & echo $! > quarkus.pid
+
+          # Esperar más tiempo
+          sleep 45
+
+          # Verificar que el proceso está corriendo
+          if [ -f quarkus.pid ]; then
+            PID=$(cat quarkus.pid)
+            if ps -p $PID > /dev/null 2>&1; then
+              echo "Quarkus iniciado (PID: $PID)"
+            else
+              echo "ERROR: Quarkus no se inició"
+              cat quarkus.log
+              exit 1
+            fi
+          fi
+
+          # Mostrar los últimos logs para debug
+          echo "=== ÚLTIMOS LOGS DE QUARKUS ==="
+          tail -30 quarkus.log
+        '''
+      }
+    }
 
     stage('Ejecutar pruebas') {
       steps {
         echo 'Ejecutando pruebas de integración...'
         sh '''
+          # Configurar la misma URL de BD para los tests
           export QUARKUS_DATASOURCE_JDBC_URL=jdbc:postgresql://postgres1:5432/bd_uq
+
+          echo "=== ANTES DE EJECUTAR TESTS ==="
+          echo "Verificando conectividad..."
+
+          # Verificar que Quarkus responde (sin fallar si no responde)
+          curl -v http://localhost:8080/ || echo "Quarkus no responde en /"
+
+          echo "=== EJECUTANDO TESTS ==="
           mvn test -Dquarkus.http.test-port=8080 -Dquarkus.test.continuous-testing=disabled
         '''
         junit '**/target/cucumber-reports/cucumber.xml'
@@ -72,6 +108,15 @@ pipeline {
     always {
       echo 'Limpieza final'
       sh 'pkill -f quarkus:dev || true'
+    }
+    failure {
+      echo 'Pipeline falló - Mostrando logs de debug'
+      sh '''
+        echo "=== LOGS DE QUARKUS ==="
+        cat quarkus.log || echo "No hay logs de Quarkus"
+        echo "=== PROCESOS JAVA ==="
+        ps aux | grep java || echo "No hay procesos Java"
+      '''
     }
   }
 }
