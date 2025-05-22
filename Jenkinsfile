@@ -42,7 +42,7 @@ pipeline {
     }
 
     stage('Detener Quarkus') {
-          steps {
+        steps {
             echo 'Deteniendo Quarkus...'
             sh '''
               if [ -f quarkus.pid ]; then
@@ -50,17 +50,14 @@ pipeline {
                 rm quarkus.pid
               fi
             '''
-          }
         }
-      }
+    }
+  }
 
-      post {
-        always {
-          echo 'Limpieza final'
-          sh 'pkill -f quarkus:dev || true'
-        }
-      }
-
-
+  post {
+    always {
+        echo 'Limpieza final'
+        sh 'pkill -f quarkus:dev || true'
+    }
   }
 }
