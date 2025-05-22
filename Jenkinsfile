@@ -24,13 +24,23 @@ pipeline {
       }
     }
 
-    stage('Análisis de calidad') {
-      steps {
-        withSonarQubeEnv("${SONARQUBE_ENV}") {
-          sh 'mvn sonar:sonar'
-        }
-      }
-    }
+      stage('Análisis de calidad - SonarQube') {
+                   steps {
+                       script {
+                           // Usa el ID de la credencial que creaste en Jenkins
+                           withCredentials([string(credentialsId: 'aa2b1009-33cc-48f3-bdc5-9f0c565d9716', variable: 'SONAR_TOKEN')]) {
+                               // La variable SONAR_TOKEN ahora contiene el valor del token
+                               sh """
+                                   mvn sonar:sonar \\
+                                     -Dsonar.projectKey=your_project_key \\
+                                     -Dsonar.host.url=http://sonarqube:9000 \\
+                                     -Dsonar.login=\$SONAR_TOKEN
+                               """
+
+                           }
+                       }
+                   }
+               }
 
     stage('Detener Quarkus') {
       steps {
