@@ -1,6 +1,6 @@
 services:
   # Servicio de PostgreSQL
-  postgres:
+  postgres1:
     image: postgres:15
     container_name: quarkus-postgres
     environment:
