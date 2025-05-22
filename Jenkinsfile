@@ -16,19 +16,45 @@ pipeline {
       }
     }
 
-    stage('Levantar Quarkus') {
-          steps {
-            echo 'Iniciando Quarkus en segundo plano...'
-            sh 'nohup mvn quarkus:dev > quarkus.log 2>&1 & echo $! > quarkus.pid'
-            sh 'sleep 10' // Ajusta el tiempo si el servidor tarda más en levantar
-          }
-        }
+    stage('Levantar servicios') {
+      steps {
+        echo 'Asegurando que los servicios estén disponibles...'
+        // Verificar que postgres esté disponible
+        sh '''
+          until nc -z postgres1 5432; do
+            echo "Esperando PostgreSQL..."
+            sleep 2
+          done
+          echo "PostgreSQL está disponible"
+        '''
+      }
+    }
 
+    stage('Levantar Quarkus') {
+      steps {
+        echo 'Iniciando Quarkus en segundo plano...'
+        sh '''
+          export QUARKUS_DATASOURCE_JDBC_URL=jdbc:postgresql://postgres1:5432/bd_uq
+          nohup mvn quarkus:dev -Dquarkus.http.host=0.0.0.0 > quarkus.log 2>&1 & echo $! > quarkus.pid
+          sleep 15
+
+          # Verificar que Quarkus esté disponible
+          until curl -f http://localhost:8080/q/health || nc -z localhost 8080; do
+            echo "Esperando Quarkus..."
+            sleep 2
+          done
+          echo "Quarkus está disponible"
+        '''
+      }
+    }
 
     stage('Ejecutar pruebas') {
       steps {
         echo 'Ejecutando pruebas de integración...'
-        sh 'mvn test'
+        sh '''
+          export QUARKUS_DATASOURCE_JDBC_URL=jdbc:postgresql://postgres1:5432/bd_uq
+          mvn test -Dquarkus.http.test-port=8080 -Dquarkus.test.continuous-testing=disabled
+        '''
         junit '**/target/cucumber-reports/cucumber.xml'
       }
     }
@@ -42,22 +68,22 @@ pipeline {
     }
 
     stage('Detener Quarkus') {
-        steps {
-            echo 'Deteniendo Quarkus...'
-            sh '''
-              if [ -f quarkus.pid ]; then
-                kill -9 $(cat quarkus.pid) || true
-                rm quarkus.pid
-              fi
-            '''
-        }
+      steps {
+        echo 'Deteniendo Quarkus...'
+        sh '''
+          if [ -f quarkus.pid ]; then
+            kill -9 $(cat quarkus.pid) || true
+            rm quarkus.pid
+          fi
+        '''
+      }
     }
   }
 
   post {
     always {
-        echo 'Limpieza final'
-        sh 'pkill -f quarkus:dev || true'
+      echo 'Limpieza final'
+      sh 'pkill -f quarkus:dev || true'
     }
   }
 }
