@@ -63,6 +63,20 @@ pipeline {
       }
     }
 
+    stage('Debug BD') {
+      steps {
+        echo 'Verificando contenido de la base de datos...'
+        sh '''
+          # Instalar cliente PostgreSQL
+          apt-get update && apt-get install -y postgresql-client || echo "Ya está instalado"
+
+          # Verificar conectividad y contenido
+          PGPASSWORD=root psql -h postgres1 -U root -d bd_uq -c "\\dt" || echo "No se pudo conectar"
+          PGPASSWORD=root psql -h postgres1 -U root -d bd_uq -c "SELECT * FROM profesores LIMIT 5;" || echo "Tabla profesores no existe o está vacía"
+        '''
+      }
+    }
+
     stage('Ejecutar pruebas') {
       steps {
         echo 'Ejecutando pruebas de integración...'
